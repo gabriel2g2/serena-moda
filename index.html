@@ -172,6 +172,9 @@
           <p class="eyebrow">Minha conta</p>
           <h2 id="customerTitle">Novo Cliente</h2>
           <p class="admin-help">Crie seu acesso rápido para salvar seus dados e acompanhar suas compras.</p>
+          <div class="customer-access-switch" role="tablist" aria-label="Acesso à conta"><button class="customer-access-tab is-active" id="showRegisterButton" type="button">Criar cadastro</button><button class="customer-access-tab" id="showLoginButton" type="button">Já sou cliente</button></div>
+          <form id="customerLoginForm" class="customer-form" hidden><label>E-mail<input id="customerLoginEmail" type="email" autocomplete="email" required></label><label>Código de acesso<input id="customerLoginCode" autocomplete="one-time-code" placeholder="SERENA-XXXXXXXX" required></label><button class="btn btn-serena" type="submit">Entrar na minha conta</button><p class="customer-message" id="customerLoginMessage" role="status"></p><small class="admin-help">Use o código recebido ao finalizar seu cadastro.</small></form>
+          <div id="customerRegisterView">
           <form id="customerForm" class="customer-form">
           <div class="customer-form-grid">
             <label>Nome completo<input id="customerName" name="name" autocomplete="name" required></label>
@@ -198,6 +201,7 @@
           <button class="btn btn-serena w-100" type="submit">Continuar</button>
             <p class="customer-message" id="customerMessage" role="status"></p>
           </form>
+          </div>
         </div>
         <div id="customerLoggedView" hidden>
           <p class="eyebrow">Olá, <span id="customerGreeting"></span></p>

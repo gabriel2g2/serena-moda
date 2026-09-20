@@ -226,6 +226,37 @@ function closeCustomerModal() {
 }
 document.getElementById("customerAccountButton").addEventListener("click", openCustomerModal);
 document.querySelectorAll("[data-close-customer]").forEach((element) => element.addEventListener("click", closeCustomerModal));
+const registerView = document.getElementById("customerRegisterView");
+const customerLoginForm = document.getElementById("customerLoginForm");
+const accessTabs = document.querySelectorAll(".customer-access-tab");
+function showCustomerAccess(view) {
+  const login = view === "login";
+  registerView.hidden = login;
+  customerLoginForm.hidden = !login;
+  accessTabs.forEach((tab) => tab.classList.toggle("is-active", tab.id === (login ? "showLoginButton" : "showRegisterButton")));
+  document.getElementById("customerTitle").textContent = login ? "Entrar na minha conta" : "Novo Cliente";
+}
+document.getElementById("showRegisterButton").addEventListener("click", () => showCustomerAccess("register"));
+document.getElementById("showLoginButton").addEventListener("click", () => showCustomerAccess("login"));
+customerLoginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = document.getElementById("customerLoginMessage");
+  message.textContent = "Entrando...";
+  const { data, error } = await supabaseClient.rpc("login_customer", {
+    customer_email: document.getElementById("customerLoginEmail").value,
+    customer_code: document.getElementById("customerLoginCode").value
+  });
+  if (error) {
+    console.error("Não foi possível entrar na conta:", error);
+    message.textContent = "E-mail ou código de acesso inválido.";
+    return;
+  }
+  customer = { ...data, shipping: null };
+  localStorage.setItem("serena-customer", JSON.stringify(customer));
+  updateCustomerHeader();
+  renderCustomerAccount();
+  await loadCustomerCart();
+});
 const customerZip = document.getElementById("customerZip");
 function cleanZip(value) {
   return value.replace(/\D/g, "").slice(0, 8);

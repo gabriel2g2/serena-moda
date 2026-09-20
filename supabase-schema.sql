@@ -259,6 +259,38 @@ begin
 end;
 $$;
 
+create or replace function public.login_customer(customer_email text, customer_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  saved_customer public.customers;
+begin
+  select * into saved_customer
+  from public.customers
+  where lower(email) = lower(trim(customer_email))
+    and upper(access_code) = upper(trim(customer_code))
+  order by created_at desc
+  limit 1;
+
+  if not found then
+    raise exception 'E-mail ou código de acesso inválido';
+  end if;
+
+  return jsonb_build_object(
+    'id', saved_customer.id, 'code', saved_customer.access_code,
+    'name', saved_customer.name, 'phone', saved_customer.phone,
+    'email', saved_customer.email, 'document', saved_customer.document,
+    'zip', saved_customer.zip, 'state', saved_customer.state,
+    'city', saved_customer.city, 'address', saved_customer.address,
+    'number', saved_customer.number, 'complement', saved_customer.complement,
+    'neighborhood', saved_customer.neighborhood
+  );
+end;
+$$;
+
 create or replace function public.save_customer_cart(customer_code text, cart_data jsonb)
 returns void
 language plpgsql
@@ -351,11 +383,13 @@ as $$
 $$;
 
 revoke all on function public.create_customer(jsonb) from public;
+revoke all on function public.login_customer(text, text) from public;
 revoke all on function public.save_customer_cart(text, jsonb) from public;
 revoke all on function public.load_customer_cart(text) from public;
 revoke all on function public.create_customer_order(text, jsonb) from public;
 revoke all on function public.list_customer_orders(text) from public;
 grant execute on function public.create_customer(jsonb) to anon, authenticated;
+grant execute on function public.login_customer(text, text) to anon, authenticated;
 grant execute on function public.save_customer_cart(text, jsonb) to anon, authenticated;
 grant execute on function public.load_customer_cart(text) to anon, authenticated;
 grant execute on function public.create_customer_order(text, jsonb) to anon, authenticated;
