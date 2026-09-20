@@ -225,10 +225,16 @@
           <small class="admin-warning">Acesso protegido pela autenticação do Supabase.</small>
         </div>
         <div id="adminView" hidden>
-          <p class="eyebrow">Painel Serena</p><h2>Gerenciar loja</h2>
-          <form id="priceForm" class="admin-form"><label>Produto<select id="adminProduct"></select></label><label>Preço<input id="adminPrice" type="number" min="0" step="0.01" placeholder="Ex.: 89,90"></label><div class="admin-product-actions"><button class="btn btn-serena" type="submit">Salvar preço</button><button class="admin-delete-button" id="deleteProductButton" type="button">Excluir produto</button></div><p class="admin-message" id="adminMessage"></p></form>
-          <hr><h3>Novo produto</h3><form id="newProductForm" class="admin-form"><label>Nome<input id="newProductName" required></label><label>Categoria<select id="newProductCategory"><option value="blusas">Blusas</option><option value="shorts">Shorts</option><option value="vestidos">Vestidos</option><option value="outras">Outras</option></select></label><label>Imagem<input id="newProductImage" type="file" accept="image/*" required><small class="file-help">Escolha uma foto do celular ou computador.</small></label><img id="newProductPreview" class="new-product-preview" alt="Pré-visualização da imagem" hidden><label>Preço<input id="newProductPrice" type="number" min="0" step="0.01" placeholder="Opcional"></label><button class="btn btn-serena" type="submit">Adicionar produto</button><p class="admin-message" id="newProductMessage"></p></form>
-          <button class="admin-logout" id="adminLogout" type="button">Sair</button>
+          <div class="admin-heading"><div><p class="eyebrow">Painel Serena</p><h2>Gerenciar loja</h2><p class="admin-help">Atualize o catálogo de forma simples e rápida.</p></div><span class="admin-product-count" id="adminProductCount">0 produtos</span></div>
+          <section class="admin-section" aria-labelledby="priceSectionTitle">
+            <div class="admin-section-heading"><div><h3 id="priceSectionTitle">Produtos cadastrados</h3><p>Altere o preço ou retire uma peça da vitrine.</p></div><i class="bi bi-tags"></i></div>
+            <form id="priceForm" class="admin-form"><label>Produto<select id="adminProduct"></select></label><label>Preço de venda<input id="adminPrice" type="number" min="0" step="0.01" placeholder="Ex.: 89,90"></label><div class="admin-product-actions"><button class="btn btn-serena" type="submit"><i class="bi bi-check2 me-2"></i>Salvar preço</button><button class="admin-delete-button" id="deleteProductButton" type="button"><i class="bi bi-eye-slash me-2"></i>Ocultar produto</button></div><p class="admin-message" id="adminMessage"></p></form>
+          </section>
+          <section class="admin-section admin-new-product" aria-labelledby="newProductTitle">
+            <div class="admin-section-heading"><div><h3 id="newProductTitle">Adicionar produto</h3><p>Inclua uma nova peça com foto, categoria e preço.</p></div><i class="bi bi-plus-circle"></i></div>
+            <form id="newProductForm" class="admin-form"><label>Nome do produto<input id="newProductName" required placeholder="Ex.: Vestido Serena"></label><label>Categoria<select id="newProductCategory"><option value="blusas">Blusas</option><option value="shorts">Shorts</option><option value="vestidos">Vestidos</option><option value="outras">Outras</option></select></label><label>Imagem do produto<input id="newProductImage" type="file" accept="image/*" required><small class="file-help">Escolha uma foto do celular ou computador.</small></label><img id="newProductPreview" class="new-product-preview" alt="Pré-visualização da imagem" hidden><label>Preço de venda<input id="newProductPrice" type="number" min="0" step="0.01" placeholder="Opcional"></label><button class="btn btn-serena" type="submit"><i class="bi bi-plus-lg me-2"></i>Adicionar produto</button><p class="admin-message" id="newProductMessage"></p></form>
+          </section>
+          <button class="admin-logout" id="adminLogout" type="button"><i class="bi bi-box-arrow-right me-1"></i>Sair do painel</button>
         </div>
       </div>
     </div>

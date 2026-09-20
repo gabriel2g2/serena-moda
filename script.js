@@ -314,13 +314,20 @@ function openAdmin() { adminModal.classList.add("is-open"); adminModal.setAttrib
 function closeAdmin() { adminModal.classList.remove("is-open"); adminModal.setAttribute("aria-hidden", "true"); document.body.classList.remove("modal-open"); }
 function updateAdminProducts() {
   adminProduct.innerHTML = "";
-  productCards().forEach((card) => {
+  const cards = productCards();
+  cards.forEach((card) => {
     const option = document.createElement("option");
     option.value = card.dataset.id;
     option.textContent = card.querySelector("h3").textContent;
     option.dataset.price = card.dataset.price;
     adminProduct.appendChild(option);
   });
+  const count = document.getElementById("adminProductCount");
+  if (count) count.textContent = `${cards.length} ${cards.length === 1 ? "produto" : "produtos"}`;
+  const hasProducts = cards.length > 0;
+  adminProduct.disabled = !hasProducts;
+  document.getElementById("adminPrice").disabled = !hasProducts;
+  document.getElementById("deleteProductButton").disabled = !hasProducts;
 }
 document.getElementById("adminButton").addEventListener("click", openAdmin);
 document.querySelectorAll("[data-close-admin]").forEach((element) => element.addEventListener("click", closeAdmin));
