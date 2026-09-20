@@ -185,8 +185,9 @@
             <label>CEP<input id="customerZip" name="zip" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" maxlength="9" required><small class="field-status" id="zipStatus"></small></label>
             <label>Estado<input id="customerState" name="state" maxlength="2" autocomplete="address-level1" placeholder="UF" required></label>
             <label class="customer-full">Cidade<input id="customerCity" name="city" autocomplete="address-level2" required></label>
-            <label class="customer-full">Rua e número<input id="customerAddress" name="address" autocomplete="street-address" required></label>
-            <label>Complemento<input id="customerComplement" name="complement" autocomplete="address-line2" placeholder="Opcional"></label>
+            <label>Rua<input id="customerAddress" name="address" autocomplete="address-line1" required></label>
+            <label>Número<input id="customerNumber" name="number" inputmode="numeric" autocomplete="address-line2" placeholder="Ex.: 123" required></label>
+            <label>Complemento<input id="customerComplement" name="complement" autocomplete="address-line3" placeholder="Opcional"></label>
             <label>Bairro<input id="customerNeighborhood" name="neighborhood" required></label>
           </div>
           <div class="shipping-box">
