@@ -35,7 +35,7 @@
             </ul>
             <div class="nav-actions d-flex gap-3">
               <button class="icon-button" aria-label="Buscar"><i class="bi bi-search"></i></button>
-              <button class="icon-button" id="customerAccountButton" type="button" aria-label="Minha conta"><i class="bi bi-person"></i></button>
+              <button class="icon-button customer-account-button" id="customerAccountButton" type="button" aria-label="Minha conta"><i class="bi bi-person"></i><span id="customerNameDisplay"></span></button>
               <button class="icon-button position-relative" id="cartButton" aria-label="Abrir sacola"><i class="bi bi-bag"></i><span class="bag-count">0</span></button>
             </div>
           </div>
@@ -168,10 +168,11 @@
       <div class="customer-backdrop" data-close-customer></div>
       <div class="customer-panel">
         <button class="modal-close" type="button" aria-label="Fechar cadastro" data-close-customer><i class="bi bi-x-lg"></i></button>
-        <p class="eyebrow">Minha conta</p>
-        <h2 id="customerTitle">Cadastro para entrega</h2>
-        <p class="admin-help">Preencha seus dados para agilizar seu pedido. Nesta etapa, as informações ainda não são enviadas ao banco.</p>
-        <form id="customerForm" class="customer-form">
+        <div id="customerGuestView">
+          <p class="eyebrow">Minha conta</p>
+          <h2 id="customerTitle">Cadastro para entrega</h2>
+          <p class="admin-help">Crie seu acesso rápido para salvar seus dados e acompanhar suas compras.</p>
+          <form id="customerForm" class="customer-form">
           <div class="customer-form-grid">
             <label>Nome completo<input id="customerName" name="name" autocomplete="name" required></label>
             <label>Telefone<input id="customerPhone" name="phone" type="tel" autocomplete="tel" placeholder="(00) 00000-0000" required></label>
@@ -189,8 +190,21 @@
             <label>Bairro<input id="customerNeighborhood" name="neighborhood" required></label>
           </div>
           <button class="btn btn-serena w-100" type="submit">Continuar</button>
-          <p class="customer-message" id="customerMessage" role="status"></p>
-        </form>
+            <p class="customer-message" id="customerMessage" role="status"></p>
+          </form>
+        </div>
+        <div id="customerLoggedView" hidden>
+          <p class="eyebrow">Olá, <span id="customerGreeting"></span></p>
+          <h2>Minha conta</h2>
+          <p class="admin-help">Seu acesso está ativo neste dispositivo.</p>
+          <div class="customer-account-code">Acesso: <strong id="customerCode"></strong></div>
+          <div class="customer-account-actions">
+            <button class="btn btn-serena" id="customerCartButton" type="button"><i class="bi bi-bag me-2"></i>Ver meu carrinho</button>
+            <button class="customer-history-button" id="customerHistoryButton" type="button"><i class="bi bi-receipt me-2"></i>Compras já feitas</button>
+          </div>
+          <div class="customer-history" id="customerHistory" hidden></div>
+          <button class="admin-logout" id="customerLogout" type="button">Sair da conta</button>
+        </div>
       </div>
     </div>
 

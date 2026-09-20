@@ -10,6 +10,7 @@ const customerModal = document.getElementById("customerModal");
 let cart = [];
 let selectedProduct = null;
 let products = [];
+let customer = JSON.parse(localStorage.getItem("serena-customer") || "null");
 
 document.getElementById("newsletterForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -126,7 +127,24 @@ document.getElementById("cartButton").addEventListener("click", openCart);
 document.querySelectorAll("[data-close-cart]").forEach((element) => element.addEventListener("click", closeCart));
 document.getElementById("checkoutButton").addEventListener("click", () => { if (cart.length) alert("O checkout será conectado na próxima etapa."); });
 
+function updateCustomerHeader() {
+  const nameDisplay = document.getElementById("customerNameDisplay");
+  nameDisplay.textContent = customer ? customer.name.split(" ")[0] : "";
+  nameDisplay.hidden = !customer;
+  document.getElementById("customerAccountButton").setAttribute("aria-label", customer ? `Minha conta: ${customer.name}` : "Minha conta");
+}
+function renderCustomerAccount() {
+  const guestView = document.getElementById("customerGuestView");
+  const loggedView = document.getElementById("customerLoggedView");
+  guestView.hidden = Boolean(customer);
+  loggedView.hidden = !customer;
+  if (!customer) return;
+  document.getElementById("customerGreeting").textContent = customer.name.split(" ")[0];
+  document.getElementById("customerCode").textContent = customer.code;
+  document.getElementById("customerHistory").hidden = true;
+}
 function openCustomerModal() {
+  renderCustomerAccount();
   customerModal.classList.add("is-open");
   customerModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
@@ -140,7 +158,24 @@ document.getElementById("customerAccountButton").addEventListener("click", openC
 document.querySelectorAll("[data-close-customer]").forEach((element) => element.addEventListener("click", closeCustomerModal));
 document.getElementById("customerForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  showMessage("customerMessage", "Cadastro preenchido. Na próxima etapa, vamos salvar seus dados com segurança.");
+  const formData = new FormData(event.target);
+  customer = Object.fromEntries(formData.entries());
+  customer.code = `SERENA-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  localStorage.setItem("serena-customer", JSON.stringify(customer));
+  updateCustomerHeader();
+  renderCustomerAccount();
+});
+document.getElementById("customerCartButton").addEventListener("click", () => { closeCustomerModal(); openCart(); });
+document.getElementById("customerHistoryButton").addEventListener("click", () => {
+  const history = document.getElementById("customerHistory");
+  history.hidden = false;
+  history.innerHTML = '<p><i class="bi bi-info-circle me-2"></i>Você ainda não possui compras registradas. Seus pedidos aparecerão aqui após a finalização da compra.</p>';
+});
+document.getElementById("customerLogout").addEventListener("click", () => {
+  customer = null;
+  localStorage.removeItem("serena-customer");
+  updateCustomerHeader();
+  closeCustomerModal();
 });
 
 function openAdmin() { adminModal.classList.add("is-open"); adminModal.setAttribute("aria-hidden", "false"); document.body.classList.add("modal-open"); updateAdminProducts(); }
@@ -231,6 +266,7 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
 });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); } });
 renderCart();
+updateCustomerHeader();
 loadProducts();
 if (supabaseClient) {
   supabaseClient.auth.getSession().then(({ data }) => {
