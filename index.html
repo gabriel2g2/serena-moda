@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Serena Moda Feminina — sua melhor versão, todos os dias.">
+    <title>Serena | Moda Feminina</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="topbar text-center">Frete grátis para compras acima de R$ 199</div>
+
+    <header class="sticky-top bg-cream border-bottom">
+      <nav class="navbar navbar-expand-lg">
+        <div class="container">
+          <a class="navbar-brand brand-mark" href="#inicio" aria-label="Serena Moda Feminina">
+            <img src="assets/logo-serena-branco.png" alt="Serena Moda Feminina">
+          </a>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-label="Abrir menu">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="mainNav">
+            <ul class="navbar-nav mx-auto gap-lg-3">
+              <li class="nav-item"><a class="nav-link" href="#novidades">Novidades</a></li>
+              <li class="nav-item"><a class="nav-link" href="#categorias">Categorias</a></li>
+              <li class="nav-item"><a class="nav-link" href="#sobre">A Serena</a></li>
+              <li class="nav-item"><a class="nav-link" href="#contato">Contato</a></li>
+            </ul>
+            <div class="nav-actions d-flex gap-3">
+              <button class="icon-button" aria-label="Buscar"><i class="bi bi-search"></i></button>
+              <button class="icon-button" aria-label="Minha conta"><i class="bi bi-person"></i></button>
+              <button class="icon-button position-relative" id="cartButton" aria-label="Abrir sacola"><i class="bi bi-bag"></i><span class="bag-count">0</span></button>
+            </div>
+          </div>
+        </div>
+      </nav>
+    </header>
+
+    <main id="inicio">
+      <section class="hero container-fluid p-0">
+        <img src="assets/hero-serena.jpeg" alt="Coleção Serena Moda Feminina" class="hero-image">
+      </section>
+
+      <section class="benefits border-bottom" aria-label="Benefícios da Serena">
+        <div class="container py-4">
+          <div class="row g-4 text-center">
+            <div class="col-6 col-lg-3 benefit"><i class="bi bi-shield-check"></i><div><strong>Compra segura</strong><small>Seus dados protegidos</small></div></div>
+            <div class="col-6 col-lg-3 benefit"><i class="bi bi-truck"></i><div><strong>Entrega para todo Brasil</strong><small>Receba com carinho</small></div></div>
+            <div class="col-6 col-lg-3 benefit"><i class="bi bi-credit-card"></i><div><strong>Parcele em até 12x</strong><small>Facilidade no pagamento</small></div></div>
+            <div class="col-6 col-lg-3 benefit"><i class="bi bi-chat-heart"></i><div><strong>Atendimento humano</strong><small>Estamos aqui para ajudar</small></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="novidades" class="section-space container">
+        <div class="section-heading text-center">
+          <p class="eyebrow">Escolhas da Serena</p>
+          <h1>Peças para acompanhar<br>o seu dia a dia</h1>
+          <p class="muted">Moda real, confortável e bonita para mulheres reais.</p>
+        </div>
+        <div class="row g-4 mt-2">
+          <div class="col-md-4"><article class="category-card card-one"><div><p>Essenciais</p><h2>Looks que<br>fazem bem.</h2><a href="#categorias">Ver coleção <i class="bi bi-arrow-right"></i></a></div></article></div>
+          <div class="col-md-4"><article class="category-card card-two"><div><p>Para todos os momentos</p><h2>Seu estilo,<br>do seu jeito.</h2><a href="#categorias">Ver coleção <i class="bi bi-arrow-right"></i></a></div></article></div>
+          <div class="col-md-4"><article class="category-card card-three"><div><p>Detalhes que importam</p><h2>Acessórios<br>com personalidade.</h2><a href="#categorias">Ver coleção <i class="bi bi-arrow-right"></i></a></div></article></div>
+        </div>
+      </section>
+
+      <section id="catalogo" class="catalog-section">
+        <div class="container section-space">
+          <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+            <div>
+              <p class="eyebrow">Nossa seleção</p>
+              <h2 class="section-title mb-0">Produtos</h2>
+            </div>
+            <div class="catalog-controls" role="group" aria-label="Filtrar produtos">
+              <button class="catalog-filter active" data-filter="todos">Todos</button>
+              <button class="catalog-filter" data-filter="blusas">Blusas</button>
+              <button class="catalog-filter" data-filter="shorts">Shorts</button>
+              <button class="catalog-filter" data-filter="vestidos">Vestidos</button>
+              <button class="catalog-filter" data-filter="outras">Outras</button>
+            </div>
+          </div>
+          <div class="catalog-wrap">
+            <button class="catalog-arrow catalog-prev" aria-label="Produtos anteriores"><i class="bi bi-chevron-left"></i></button>
+            <div class="product-catalog" id="productCatalog">
+              <article class="product-card" data-category="blusas" data-price="0"><img src="assets/produtos/cropped-corset.jpeg" alt="Cropped corset terracota"><div class="product-info"><span>Blusas</span><h3>Cropped Corset</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="blusas" data-price="Preço a definir"><img src="assets/produtos/regata-preta.jpeg" alt="Regata preta com detalhe branco"><div class="product-info"><span>Blusas</span><h3>Regata Contrast</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="blusas" data-price="Preço a definir"><img src="assets/produtos/cropped-rosa.jpeg" alt="Cropped rosa"><div class="product-info"><span>Blusas</span><h3>Cropped Rosa</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="blusas" data-price="Preço a definir"><img src="assets/produtos/cropped-regata.jpeg" alt="Cropped regata branco"><div class="product-info"><span>Blusas</span><h3>Cropped Regata</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="blusas" data-price="Preço a definir"><img src="assets/produtos/camiseta-grafica.jpeg" alt="Camiseta preta estampada"><div class="product-info"><span>Blusas</span><h3>Camiseta Gráfica</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="blusas" data-price="Preço a definir"><img src="assets/produtos/regata-preta-basica.jpeg" alt="Regata preta básica"><div class="product-info"><span>Blusas</span><h3>Regata Básica</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="shorts" data-price="Preço a definir"><img src="assets/produtos/short-jeans.jpeg" alt="Short jeans preto"><div class="product-info"><span>Shorts</span><h3>Short Jeans</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="shorts" data-price="Preço a definir"><img src="assets/produtos/short-preto-detalhe.jpeg" alt="Short preto com detalhe dourado"><div class="product-info"><span>Shorts</span><h3>Short Alfaiataria</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="shorts" data-price="Preço a definir"><img src="assets/produtos/short-couro.jpeg" alt="Short de couro preto"><div class="product-info"><span>Shorts</span><h3>Short Couro</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="vestidos" data-price="Preço a definir"><img src="assets/produtos/vestido-marinho.jpeg" alt="Vestido marinho de gola alta"><div class="product-info"><span>Vestidos</span><h3>Vestido Marinho</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="outras" data-price="Preço a definir"><img src="assets/produtos/macacao-preto.jpeg" alt="Macacão preto de alfaiataria"><div class="product-info"><span>Conjuntos</span><h3>Macacão Alfaiataria</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="outras" data-price="Preço a definir"><img src="assets/produtos/body-branco.jpeg" alt="Body branco com detalhe dourado"><div class="product-info"><span>Body</span><h3>Body Textura</h3><strong>Ver produto</strong></div></article>
+              <article class="product-card" data-category="outras" data-price="Preço a definir"><img src="assets/produtos/jaqueta-couro.jpeg" alt="Jaqueta de couro preta"><div class="product-info"><span>Jaquetas</span><h3>Jaqueta Couro</h3><strong>Ver produto</strong></div></article>
+            </div>
+            <button class="catalog-arrow catalog-next" aria-label="Próximos produtos"><i class="bi bi-chevron-right"></i></button>
+          </div>
+        </div>
+      </section>
+
+      <div class="product-modal" id="productModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modalProductName">
+        <div class="product-modal-backdrop" data-close-modal></div>
+        <div class="product-modal-content">
+          <button class="modal-close" type="button" aria-label="Fechar produto" data-close-modal><i class="bi bi-x-lg"></i></button>
+          <div class="row g-0 align-items-stretch">
+            <div class="col-md-6"><img class="modal-product-image" id="modalProductImage" alt=""></div>
+            <div class="col-md-6 modal-product-details"><span id="modalProductCategory"></span><h2 id="modalProductName"></h2><p>Uma escolha Serena para deixar seus dias mais bonitos e confortáveis.</p><strong class="modal-product-price" id="modalProductPrice"></strong><button class="btn btn-serena mt-4" id="addToCartButton" type="button">Adicionar à sacola</button></div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="cart-drawer" id="cartDrawer" aria-hidden="true" aria-labelledby="cartTitle">
+        <div class="cart-backdrop" data-close-cart></div>
+        <div class="cart-panel">
+          <div class="cart-header"><h2 id="cartTitle">Sua sacola</h2><button class="modal-close" type="button" aria-label="Fechar sacola" data-close-cart><i class="bi bi-x-lg"></i></button></div>
+          <div class="cart-items" id="cartItems"><p class="cart-empty">Sua sacola está vazia.</p></div>
+          <div class="cart-footer"><div class="cart-total"><span>Subtotal</span><strong id="cartTotal">Preço a definir</strong></div><button class="btn btn-serena w-100" type="button" id="checkoutButton">Finalizar pedido</button><small class="cart-note">Os valores serão atualizados quando os preços forem cadastrados.</small></div>
+        </div>
+      </aside>
+
+      <section id="categorias" class="categories-section">
+        <div class="container section-space">
+          <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
+            <div><p class="eyebrow">Encontre seu estilo</p><h2 class="section-title mb-0">Categorias</h2></div>
+            <a class="text-link" href="#catalogo" data-category-filter="todos">Ver tudo <i class="bi bi-arrow-right"></i></a>
+          </div>
+          <div class="row g-3">
+            <div class="col-6 col-md-3"><a class="category-pill" href="#catalogo" data-category-filter="vestidos"><i class="bi bi-person-standing-dress"></i><span>Vestidos</span></a></div>
+            <div class="col-6 col-md-3"><a class="category-pill" href="#catalogo" data-category-filter="shorts"><i class="bi bi-stars"></i><span>Shorts</span></a></div>
+            <div class="col-6 col-md-3"><a class="category-pill" href="#catalogo" data-category-filter="blusas"><i class="bi bi-person"></i><span>Blusas</span></a></div>
+            <div class="col-6 col-md-3"><a class="category-pill" href="#catalogo" data-category-filter="outras"><i class="bi bi-handbag"></i><span>Outras peças</span></a></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sobre" class="about-section">
+        <div class="container section-space">
+          <div class="row align-items-center g-5">
+            <div class="col-lg-6"><img src="assets/logo-serena.jpeg" alt="Logo Serena Moda Feminina" class="about-image"></div>
+            <div class="col-lg-6"><p class="eyebrow">Sobre a Serena</p><h2 class="section-title">Mais que roupas,<br>confiança.</h2><p class="muted about-copy">A Serena nasceu para celebrar a mulher que você é. Criamos escolhas versáteis, leves e atemporais para que você se vista de si mesma em todos os dias.</p><a class="btn btn-serena" href="#contato">Conheça a Serena</a></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="contato" class="newsletter-section">
+        <div class="container text-center section-space">
+          <p class="eyebrow">Fique por perto</p><h2 class="section-title">Receba novidades da Serena</h2><p class="muted">Cadastre seu e-mail e acompanhe lançamentos e condições especiais.</p>
+          <form class="newsletter-form mx-auto mt-4" id="newsletterForm"><input type="email" class="form-control" placeholder="Seu melhor e-mail" aria-label="Seu melhor e-mail" required><button class="btn btn-serena" type="submit">Quero receber</button></form>
+          <p id="formMessage" class="form-message" role="status"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer"><div class="container d-flex flex-wrap justify-content-between align-items-center gap-3"><a class="brand-mark" href="#inicio"><img src="assets/logo-serena-branco.png" alt="Serena Moda Feminina"></a><p class="mb-0">Sua melhor versão, todos os dias. <span class="heart">♡</span></p><div class="socials"><a href="#contato" aria-label="Instagram"><i class="bi bi-instagram"></i></a><a href="#contato" aria-label="WhatsApp"><i class="bi bi-whatsapp"></i></a><button class="sunflower-button" id="adminButton" aria-label="Área da Serena">🌻</button></div></div></footer>
+
+    <div class="admin-modal" id="adminModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+      <div class="admin-backdrop" data-close-admin></div>
+      <div class="admin-panel">
+        <button class="modal-close" type="button" aria-label="Fechar área da Serena" data-close-admin><i class="bi bi-x-lg"></i></button>
+        <div id="loginView">
+          <p class="eyebrow">Área da Serena</p><h2 id="adminTitle">Acesso administrativo</h2>
+          <p class="admin-help">Entre para atualizar preços e cadastrar novos produtos nesta página.</p>
+          <form id="adminLoginForm" class="admin-form"><label>Usuário<input id="adminUser" required autocomplete="username"></label><label>Senha<input id="adminPassword" type="password" required autocomplete="current-password"></label><button class="btn btn-serena" type="submit">Entrar</button><p class="admin-message" id="loginMessage"></p></form>
+          <small class="admin-warning">Modo demonstração: os dados ficam salvos somente neste navegador. Para produção, use autenticação com servidor.</small>
+        </div>
+        <div id="adminView" hidden>
+          <p class="eyebrow">Painel Serena</p><h2>Gerenciar loja</h2>
+          <form id="priceForm" class="admin-form"><label>Produto<select id="adminProduct"></select></label><label>Preço<input id="adminPrice" type="number" min="0" step="0.01" placeholder="Ex.: 89,90"></label><div class="admin-product-actions"><button class="btn btn-serena" type="submit">Salvar preço</button><button class="admin-delete-button" id="deleteProductButton" type="button">Excluir produto</button></div><p class="admin-message" id="adminMessage"></p></form>
+          <hr><h3>Novo produto</h3><form id="newProductForm" class="admin-form"><label>Nome<input id="newProductName" required></label><label>Categoria<select id="newProductCategory"><option value="blusas">Blusas</option><option value="shorts">Shorts</option><option value="vestidos">Vestidos</option><option value="outras">Outras</option></select></label><label>Imagem<input id="newProductImage" type="file" accept="image/*" required><small class="file-help">Escolha uma foto do celular ou computador.</small></label><img id="newProductPreview" class="new-product-preview" alt="Pré-visualização da imagem" hidden><label>Preço<input id="newProductPrice" type="number" min="0" step="0.01" placeholder="Opcional"></label><button class="btn btn-serena" type="submit">Adicionar produto</button><p class="admin-message" id="newProductMessage"></p></form>
+          <button class="admin-logout" id="adminLogout" type="button">Sair</button>
+        </div>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
