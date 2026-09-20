@@ -13,9 +13,11 @@
 .navbar{padding:.7rem 0}
 .nav-link{font-size:.68rem;letter-spacing:.05em}
 .hero-image{max-height:540px}
+.hero{background:var(--beige);overflow:hidden}.hero-image{width:100%;height:auto;max-height:none;object-fit:contain;object-position:center;image-rendering:auto}
 .benefit{gap:.55rem}
 .benefit i{font-size:1.15rem}
 .section-space{padding-top:3.8rem;padding-bottom:3.8rem}
+@media(max-width:767px){.hero-image{width:100%;height:auto;min-height:0;object-fit:contain}}
 .eyebrow{font-size:.62rem;letter-spacing:.1em;margin-bottom:.5rem}
 .section-heading h1,.section-title{font-size:2.15rem;font-weight:500}
 .muted{font-size:.84rem;line-height:1.6}
