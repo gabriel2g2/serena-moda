@@ -92,6 +92,84 @@ where not exists (
   select 1 from public.products existing where existing.name = seed.name
 );
 
+update public.products set
+  description = 'Cropped estruturado com modelagem confortável e acabamento delicado para compor looks modernos.',
+  color = 'Terracota',
+  sizes = array['P', 'M', 'G']
+where name = 'Cropped Corset';
+
+update public.products set
+  description = 'Regata leve com detalhe contrastante e caimento versátil para usar em diferentes ocasiões.',
+  color = 'Preto e branco',
+  sizes = array['P', 'M', 'G', 'GG']
+where name = 'Regata Contrast';
+
+update public.products set
+  description = 'Cropped feminino em tom suave, confortável e fácil de combinar com peças de cintura alta.',
+  color = 'Rosa',
+  sizes = array['P', 'M', 'G']
+where name = 'Cropped Rosa';
+
+update public.products set
+  description = 'Cropped regata básico e elegante, ideal para produções leves durante o dia.',
+  color = 'Off-white',
+  sizes = array['P', 'M', 'G', 'GG']
+where name = 'Cropped Regata';
+
+update public.products set
+  description = 'Camiseta com estampa gráfica e tecido macio para um visual casual cheio de personalidade.',
+  color = 'Preto',
+  sizes = array['P', 'M', 'G', 'GG']
+where name = 'Camiseta Gráfica';
+
+update public.products set
+  description = 'Regata básica de tecido confortável, uma peça essencial para montar combinações práticas.',
+  color = 'Preto',
+  sizes = array['P', 'M', 'G']
+where name = 'Regata Básica';
+
+update public.products set
+  description = 'Short jeans de cintura confortável com visual versátil para os dias mais quentes.',
+  color = 'Azul jeans',
+  sizes = array['36', '38', '40', '42']
+where name = 'Short Jeans';
+
+update public.products set
+  description = 'Short de alfaiataria com corte elegante e detalhe sofisticado para produções arrumadas.',
+  color = 'Preto',
+  sizes = array['36', '38', '40', '42']
+where name = 'Short Alfaiataria';
+
+update public.products set
+  description = 'Short com acabamento que imita couro e cintura confortável para um look marcante.',
+  color = 'Preto',
+  sizes = array['36', '38', '40']
+where name = 'Short Couro';
+
+update public.products set
+  description = 'Vestido de gola alta com silhueta elegante e caimento confortável para ocasiões especiais.',
+  color = 'Azul-marinho',
+  sizes = array['P', 'M', 'G']
+where name = 'Vestido Marinho';
+
+update public.products set
+  description = 'Macacão de alfaiataria com visual sofisticado e modelagem que valoriza a silhueta.',
+  color = 'Preto',
+  sizes = array['P', 'M', 'G', 'GG']
+where name = 'Macacão Alfaiataria';
+
+update public.products set
+  description = 'Body com textura delicada e acabamento elegante para usar sozinho ou em sobreposições.',
+  color = 'Branco',
+  sizes = array['P', 'M', 'G']
+where name = 'Body Textura';
+
+update public.products set
+  description = 'Jaqueta com acabamento inspirado no couro, perfeita para completar produções nos dias frescos.',
+  color = 'Preto',
+  sizes = array['P', 'M', 'G', 'GG']
+where name = 'Jaqueta Couro';
+
 create table if not exists public.customers (
   id uuid primary key default gen_random_uuid(),
   access_code text not null unique,
