@@ -6,6 +6,7 @@ const cartItems = document.getElementById("cartItems");
 const cartTotal = document.getElementById("cartTotal");
 const adminModal = document.getElementById("adminModal");
 const adminProduct = document.getElementById("adminProduct");
+const customerModal = document.getElementById("customerModal");
 let cart = [];
 let selectedProduct = null;
 let products = [];
@@ -125,6 +126,23 @@ document.getElementById("cartButton").addEventListener("click", openCart);
 document.querySelectorAll("[data-close-cart]").forEach((element) => element.addEventListener("click", closeCart));
 document.getElementById("checkoutButton").addEventListener("click", () => { if (cart.length) alert("O checkout será conectado na próxima etapa."); });
 
+function openCustomerModal() {
+  customerModal.classList.add("is-open");
+  customerModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+function closeCustomerModal() {
+  customerModal.classList.remove("is-open");
+  customerModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+document.getElementById("customerAccountButton").addEventListener("click", openCustomerModal);
+document.querySelectorAll("[data-close-customer]").forEach((element) => element.addEventListener("click", closeCustomerModal));
+document.getElementById("customerForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  showMessage("customerMessage", "Cadastro preenchido. Na próxima etapa, vamos salvar seus dados com segurança.");
+});
+
 function openAdmin() { adminModal.classList.add("is-open"); adminModal.setAttribute("aria-hidden", "false"); document.body.classList.add("modal-open"); updateAdminProducts(); }
 function closeAdmin() { adminModal.classList.remove("is-open"); adminModal.setAttribute("aria-hidden", "true"); document.body.classList.remove("modal-open"); }
 function updateAdminProducts() {
@@ -211,7 +229,7 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
   document.getElementById("adminLoginForm").reset();
   closeAdmin();
 });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); } });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); } });
 renderCart();
 loadProducts();
 if (supabaseClient) {
