@@ -11,6 +11,7 @@ let cart = [];
 let selectedProduct = null;
 let products = [];
 let customer = JSON.parse(localStorage.getItem("serena-customer") || "null");
+let shippingEstimate = customer?.shipping ?? null;
 
 document.getElementById("newsletterForm").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -107,6 +108,28 @@ function renderCart() {
   const pendingPrice = cart.some((item) => !item.price);
   cartTotal.textContent = pendingPrice ? "Preço a definir" : formatPrice(cart.reduce((sum, item) => sum + item.price * item.quantity, 0));
   document.querySelector(".bag-count").textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+  syncCart();
+}
+async function syncCart() {
+  if (!customer?.code || !supabaseClient) return;
+  const { error } = await supabaseClient.rpc("save_customer_cart", {
+    customer_code: customer.code,
+    cart_data: cart.map((item) => ({ id: item.id, quantity: item.quantity }))
+  });
+  if (error) console.error("Não foi possível sincronizar a sacola:", error);
+}
+async function loadCustomerCart() {
+  if (!customer?.code || !supabaseClient) return;
+  const { data, error } = await supabaseClient.rpc("load_customer_cart", { customer_code: customer.code });
+  if (error) {
+    console.error("Não foi possível carregar a sacola:", error);
+    return;
+  }
+  cart = (data || []).map((saved) => {
+    const product = products.find((item) => item.id === saved.id);
+    return product ? { id: product.id, name: product.name, category: product.category, image: product.image_url, price: Number(product.price) || 0, quantity: saved.quantity } : null;
+  }).filter(Boolean);
+  renderCart();
 }
 function updateCart(id, action) {
   const item = cart.find((product) => product.id === id);
@@ -125,7 +148,50 @@ document.getElementById("addToCartButton").addEventListener("click", () => {
 });
 document.getElementById("cartButton").addEventListener("click", openCart);
 document.querySelectorAll("[data-close-cart]").forEach((element) => element.addEventListener("click", closeCart));
-document.getElementById("checkoutButton").addEventListener("click", () => { if (cart.length) alert("O checkout será conectado na próxima etapa."); });
+async function checkout() {
+  if (!cart.length) return;
+  if (!customer) {
+    closeCart();
+    openCustomerModal();
+    document.getElementById("customerMessage").textContent = "Cadastre seus dados antes de finalizar o pedido.";
+    return;
+  }
+  if (cart.some((item) => !item.price)) {
+    alert("Cadastre os preços dos produtos antes de finalizar o pedido.");
+    return;
+  }
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  if (shippingEstimate === null) {
+    closeCart();
+    openCustomerModal();
+    document.getElementById("customerMessage").textContent = "Calcule o frete antes de finalizar o pedido.";
+    return;
+  }
+  const { error } = await supabaseClient.rpc("create_customer_order", {
+    customer_code: customer.code,
+    order_data: {
+      subtotal,
+      shipping: shippingEstimate,
+      total: subtotal + shippingEstimate,
+      shipping_address: {
+        zip: customer.zip, state: customer.state, city: customer.city,
+        address: customer.address, number: customer.number,
+        complement: customer.complement, neighborhood: customer.neighborhood
+      },
+      items: cart.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity }))
+    }
+  });
+  if (error) {
+    console.error("Não foi possível criar o pedido:", error);
+    alert("Não foi possível finalizar o pedido agora. Tente novamente.");
+    return;
+  }
+  cart = [];
+  renderCart();
+  alert("Pedido registrado com sucesso! Entraremos em contato para confirmar o pagamento.");
+  closeCart();
+}
+document.getElementById("checkoutButton").addEventListener("click", checkout);
 
 function updateCustomerHeader() {
   const nameDisplay = document.getElementById("customerNameDisplay");
@@ -157,7 +223,6 @@ function closeCustomerModal() {
 document.getElementById("customerAccountButton").addEventListener("click", openCustomerModal);
 document.querySelectorAll("[data-close-customer]").forEach((element) => element.addEventListener("click", closeCustomerModal));
 const customerZip = document.getElementById("customerZip");
-let shippingEstimate = null;
 function cleanZip(value) {
   return value.replace(/\D/g, "").slice(0, 8);
 }
@@ -205,21 +270,38 @@ document.getElementById("calculateShippingButton").addEventListener("click", () 
   shippingEstimate = rate;
   result.textContent = rate === 0 ? "Frete grátis para este pedido." : `Frete estimado: ${formatPrice(rate)}. Prazo e valor finais serão confirmados no checkout.`;
 });
-document.getElementById("customerForm").addEventListener("submit", (event) => {
+document.getElementById("customerForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(event.target);
-  customer = Object.fromEntries(formData.entries());
-  customer.shipping = shippingEstimate;
-  customer.code = `SERENA-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  const formValues = Object.fromEntries(formData.entries());
+  const { data, error } = await supabaseClient.rpc("create_customer", { customer_data: formValues });
+  if (error) {
+    console.error("Não foi possível cadastrar cliente:", error);
+    document.getElementById("customerMessage").textContent = "Não foi possível salvar seu cadastro. Tente novamente.";
+    return;
+  }
+  customer = { ...data, shipping: shippingEstimate };
   localStorage.setItem("serena-customer", JSON.stringify(customer));
   updateCustomerHeader();
   renderCustomerAccount();
+  await loadCustomerCart();
 });
 document.getElementById("customerCartButton").addEventListener("click", () => { closeCustomerModal(); openCart(); });
-document.getElementById("customerHistoryButton").addEventListener("click", () => {
+document.getElementById("customerHistoryButton").addEventListener("click", async () => {
   const history = document.getElementById("customerHistory");
   history.hidden = false;
-  history.innerHTML = '<p><i class="bi bi-info-circle me-2"></i>Você ainda não possui compras registradas. Seus pedidos aparecerão aqui após a finalização da compra.</p>';
+  history.innerHTML = "<p>Carregando compras...</p>";
+  const { data, error } = await supabaseClient.rpc("list_customer_orders", { customer_code: customer.code });
+  if (error) {
+    console.error("Não foi possível carregar compras:", error);
+    history.innerHTML = "<p>Não foi possível carregar suas compras.</p>";
+    return;
+  }
+  history.innerHTML = data?.length ? data.map((order) => {
+    const date = new Date(order.created_at).toLocaleDateString("pt-BR");
+    const items = order.items.map((item) => `${item.quantity}x ${item.name}`).join(", ");
+    return `<article><strong>Pedido de ${date}</strong><br><small>${items}</small><br><span>${formatPrice(Number(order.total))} · ${order.status === "pending" ? "Aguardando confirmação" : order.status}</span></article>`;
+  }).join("") : '<p><i class="bi bi-info-circle me-2"></i>Você ainda não possui compras registradas.</p>';
 });
 document.getElementById("customerLogout").addEventListener("click", () => {
   customer = null;
@@ -317,7 +399,7 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); } });
 renderCart();
 updateCustomerHeader();
-loadProducts();
+loadProducts().then(() => loadCustomerCart());
 if (supabaseClient) {
   supabaseClient.auth.getSession().then(({ data }) => {
     if (data.session) {
