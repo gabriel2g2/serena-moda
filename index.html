@@ -182,12 +182,17 @@
           <hr>
           <h3>Endereço de entrega</h3>
           <div class="customer-form-grid">
-            <label>CEP<input id="customerZip" name="zip" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" required></label>
+            <label>CEP<input id="customerZip" name="zip" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" maxlength="9" required><small class="field-status" id="zipStatus"></small></label>
             <label>Estado<input id="customerState" name="state" maxlength="2" autocomplete="address-level1" placeholder="UF" required></label>
             <label class="customer-full">Cidade<input id="customerCity" name="city" autocomplete="address-level2" required></label>
             <label class="customer-full">Rua e número<input id="customerAddress" name="address" autocomplete="street-address" required></label>
             <label>Complemento<input id="customerComplement" name="complement" autocomplete="address-line2" placeholder="Opcional"></label>
             <label>Bairro<input id="customerNeighborhood" name="neighborhood" required></label>
+          </div>
+          <div class="shipping-box">
+            <div><strong>Calcule seu frete</strong><small>Estimativa para entrega saindo de São Paulo</small></div>
+            <button class="customer-history-button" id="calculateShippingButton" type="button">Calcular frete</button>
+            <p class="shipping-result" id="shippingResult" role="status"></p>
           </div>
           <button class="btn btn-serena w-100" type="submit">Continuar</button>
             <p class="customer-message" id="customerMessage" role="status"></p>

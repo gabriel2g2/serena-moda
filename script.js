@@ -156,10 +156,60 @@ function closeCustomerModal() {
 }
 document.getElementById("customerAccountButton").addEventListener("click", openCustomerModal);
 document.querySelectorAll("[data-close-customer]").forEach((element) => element.addEventListener("click", closeCustomerModal));
+const customerZip = document.getElementById("customerZip");
+let shippingEstimate = null;
+function cleanZip(value) {
+  return value.replace(/\D/g, "").slice(0, 8);
+}
+function formatZip(value) {
+  const digits = cleanZip(value);
+  return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+}
+function shippingByRegion(zip) {
+  const region = zip.charAt(0);
+  const rates = { "0": 14.9, "1": 14.9, "2": 19.9, "3": 21.9, "4": 27.9, "5": 29.9, "6": 31.9, "7": 24.9, "8": 22.9, "9": 24.9 };
+  return rates[region] || null;
+}
+async function lookupZipCode() {
+  const zip = cleanZip(customerZip.value);
+  const status = document.getElementById("zipStatus");
+  if (zip.length !== 8) return;
+  status.textContent = "Consultando endereço...";
+  try {
+    const response = await fetch(`https://viacep.com.br/ws/${zip}/json/`);
+    if (!response.ok) throw new Error("Falha ao consultar CEP");
+    const address = await response.json();
+    if (address.erro) throw new Error("CEP não encontrado");
+    document.getElementById("customerState").value = address.uf || "";
+    document.getElementById("customerCity").value = address.localidade || "";
+    document.getElementById("customerAddress").value = address.logradouro || "";
+    document.getElementById("customerNeighborhood").value = address.bairro || "";
+    status.textContent = "Endereço encontrado.";
+  } catch (error) {
+    status.textContent = "Não encontramos esse CEP. Confira os números.";
+    console.error("Não foi possível consultar o CEP:", error);
+  }
+}
+customerZip.addEventListener("input", () => {
+  customerZip.value = formatZip(customerZip.value);
+  if (cleanZip(customerZip.value).length === 8) lookupZipCode();
+});
+document.getElementById("calculateShippingButton").addEventListener("click", () => {
+  const zip = cleanZip(customerZip.value);
+  const result = document.getElementById("shippingResult");
+  if (zip.length !== 8) { result.textContent = "Informe um CEP válido para calcular."; return; }
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  if (cart.length && cart.some((item) => !item.price)) { result.textContent = "Cadastre os preços dos produtos para calcular o frete."; return; }
+  const rate = subtotal >= 199 ? 0 : shippingByRegion(zip);
+  if (rate === null) { result.textContent = "Não foi possível estimar o frete para este CEP."; return; }
+  shippingEstimate = rate;
+  result.textContent = rate === 0 ? "Frete grátis para este pedido." : `Frete estimado: ${formatPrice(rate)}. Prazo e valor finais serão confirmados no checkout.`;
+});
 document.getElementById("customerForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const formData = new FormData(event.target);
   customer = Object.fromEntries(formData.entries());
+  customer.shipping = shippingEstimate;
   customer.code = `SERENA-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   localStorage.setItem("serena-customer", JSON.stringify(customer));
   updateCustomerHeader();
