@@ -4,9 +4,16 @@ create table if not exists public.products (
   category text not null check (category in ('blusas', 'shorts', 'vestidos', 'outras')),
   image_url text not null,
   price numeric(10, 2),
+  description text not null default '',
+  color text not null default '',
+  sizes text[] not null default '{}',
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.products add column if not exists description text not null default '';
+alter table public.products add column if not exists color text not null default '';
+alter table public.products add column if not exists sizes text[] not null default '{}';
 
 alter table public.products enable row level security;
 

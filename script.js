@@ -52,7 +52,7 @@ async function loadProducts() {
     showMessage("formMessage", "Configuração do Supabase não encontrada.");
     return;
   }
-  const { data, error } = await supabaseClient.from("products").select("id,name,category,image_url,price").eq("active", true).order("created_at", { ascending: false });
+  const { data, error } = await supabaseClient.from("products").select("id,name,category,image_url,price,description,color,sizes").eq("active", true).order("created_at", { ascending: false });
   if (error) {
     console.error("Não foi possível carregar produtos do Supabase:", error);
     showMessage("formMessage", "Não foi possível carregar o catálogo online.");
@@ -66,6 +66,7 @@ async function loadProducts() {
 
 function openProduct(card) {
   const image = card.querySelector("img");
+  const product = products.find((item) => item.id === card.dataset.id) || {};
   const price = Number(card.dataset.price) || 0;
   const name = card.querySelector("h3").textContent;
   const category = card.querySelector("span").textContent;
@@ -73,8 +74,11 @@ function openProduct(card) {
   document.getElementById("modalProductImage").alt = image.alt;
   document.getElementById("modalProductCategory").textContent = category;
   document.getElementById("modalProductName").textContent = name;
+  document.getElementById("modalProductDescription").textContent = product.description || "Uma escolha Serena para deixar seus dias mais bonitos e confortáveis.";
+  const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+  document.getElementById("modalProductMeta").innerHTML = `${product.color ? `<span><b>Cor:</b> ${product.color}</span>` : ""}${sizes.length ? `<span><b>Tamanhos:</b> ${sizes.join(", ")}</span>` : ""}`;
   document.getElementById("modalProductPrice").textContent = price ? formatPrice(price) : "Preço a definir";
-  selectedProduct = { id: card.dataset.id || image.src, name, category, image: image.src, price };
+  selectedProduct = { id: card.dataset.id || image.src, name, category, image: image.src, price, description: product.description || "", color: product.color || "", sizes };
   productModal.classList.add("is-open");
   productModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
@@ -320,6 +324,7 @@ function updateAdminProducts() {
     option.value = card.dataset.id;
     option.textContent = card.querySelector("h3").textContent;
     option.dataset.price = card.dataset.price;
+    option.dataset.productId = card.dataset.id;
     adminProduct.appendChild(option);
   });
   const count = document.getElementById("adminProductCount");
@@ -328,6 +333,17 @@ function updateAdminProducts() {
   adminProduct.disabled = !hasProducts;
   document.getElementById("adminPrice").disabled = !hasProducts;
   document.getElementById("deleteProductButton").disabled = !hasProducts;
+  if (hasProducts) populateAdminProduct();
+}
+function populateAdminProduct() {
+  const product = products.find((item) => item.id === adminProduct.value) || products[0];
+  if (!product) return;
+  adminProduct.value = product.id;
+  document.getElementById("adminProductName").value = product.name || "";
+  document.getElementById("adminPrice").value = product.price ?? "";
+  document.getElementById("adminProductDescription").value = product.description || "";
+  document.getElementById("adminProductColor").value = product.color || "";
+  document.getElementById("adminProductSizes").value = Array.isArray(product.sizes) ? product.sizes.join(", ") : "";
 }
 document.getElementById("adminButton").addEventListener("click", openAdmin);
 document.querySelectorAll("[data-close-admin]").forEach((element) => element.addEventListener("click", closeAdmin));
@@ -344,19 +360,28 @@ document.getElementById("adminLoginForm").addEventListener("submit", async (even
 });
 adminProduct.addEventListener("change", () => {
   const option = adminProduct.selectedOptions[0];
-  document.getElementById("adminPrice").value = option?.dataset.price || "";
+  populateAdminProduct();
 });
 document.getElementById("priceForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = adminProduct.value;
   const price = Number(document.getElementById("adminPrice").value);
-  if (!id || Number.isNaN(price) || price < 0) { showMessage("adminMessage", "Selecione um produto e informe um preço válido."); return; }
-  const { error } = await supabaseClient.from("products").update({ price }).eq("id", id);
+  const product = products.find((item) => item.id === id);
+  const sizes = document.getElementById("adminProductSizes").value.split(",").map((size) => size.trim()).filter(Boolean);
+  if (!id || !product || Number.isNaN(price) || price < 0) { showMessage("adminMessage", "Selecione um produto e informe um preço válido."); return; }
+  const updates = { name: document.getElementById("adminProductName").value.trim(), description: document.getElementById("adminProductDescription").value.trim(), color: document.getElementById("adminProductColor").value.trim(), sizes, price };
+  if (!updates.name) { showMessage("adminMessage", "Informe o nome do produto."); return; }
+  const { data: updated, error } = await supabaseClient.from("products").update(updates).eq("id", id).select().single();
   if (error) { showMessage("adminMessage", "Não foi possível salvar o preço."); return; }
   const card = document.querySelector(`.product-card[data-id="${CSS.escape(id)}"]`);
-  if (card) card.dataset.price = price;
+  if (card) {
+    card.dataset.price = price;
+    card.querySelector("h3").textContent = updated.name;
+  }
+  Object.assign(product, updated);
+  adminProduct.selectedOptions[0].textContent = updated.name;
   adminProduct.selectedOptions[0].dataset.price = price;
-  showMessage("adminMessage", "Preço salvo no Supabase.");
+  showMessage("adminMessage", "Alterações salvas no Supabase.");
 });
 document.getElementById("newProductImage").addEventListener("change", (event) => {
   const file = event.target.files[0];
@@ -372,12 +397,13 @@ document.getElementById("newProductForm").addEventListener("submit", async (even
   const file = document.getElementById("newProductImage").files[0];
   const priceValue = document.getElementById("newProductPrice").value;
   const price = priceValue ? Number(priceValue) : null;
+  const sizes = document.getElementById("newProductSizes").value.split(",").map((size) => size.trim()).filter(Boolean);
   if (!name || !file) { showMessage("newProductMessage", "Informe o nome e escolha uma imagem."); return; }
   const filePath = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
   const upload = await supabaseClient.storage.from("products").upload(filePath, file, { upsert: false, contentType: file.type });
   if (upload.error) { showMessage("newProductMessage", "Não foi possível enviar a imagem."); return; }
   const { data: publicUrl } = supabaseClient.storage.from("products").getPublicUrl(filePath);
-  const insert = await supabaseClient.from("products").insert({ name, category, image_url: publicUrl.publicUrl, price }).select().single();
+  const insert = await supabaseClient.from("products").insert({ name, category, image_url: publicUrl.publicUrl, price, description: document.getElementById("newProductDescription").value.trim(), color: document.getElementById("newProductColor").value.trim(), sizes }).select().single();
   if (insert.error) { showMessage("newProductMessage", "Imagem enviada, mas não foi possível salvar o produto."); return; }
   addProductCard(insert.data);
   products.push(insert.data);
