@@ -339,6 +339,11 @@ function populateAdminProduct() {
   const product = products.find((item) => item.id === adminProduct.value) || products[0];
   if (!product) return;
   adminProduct.value = product.id;
+  const imageInput = document.getElementById("adminProductImage");
+  const imagePreview = document.getElementById("adminProductPreview");
+  imageInput.value = "";
+  imagePreview.src = product.image_url || "";
+  imagePreview.hidden = !product.image_url;
   document.getElementById("adminProductName").value = product.name || "";
   document.getElementById("adminPrice").value = product.price ?? "";
   document.getElementById("adminProductDescription").value = product.description || "";
@@ -362,6 +367,16 @@ adminProduct.addEventListener("change", () => {
   const option = adminProduct.selectedOptions[0];
   populateAdminProduct();
 });
+document.getElementById("adminProductImage").addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  const preview = document.getElementById("adminProductPreview");
+  if (!file) {
+    populateAdminProduct();
+    return;
+  }
+  preview.src = URL.createObjectURL(file);
+  preview.hidden = false;
+});
 document.getElementById("priceForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const id = adminProduct.value;
@@ -371,16 +386,34 @@ document.getElementById("priceForm").addEventListener("submit", async (event) =>
   if (!id || !product || Number.isNaN(price) || price < 0) { showMessage("adminMessage", "Selecione um produto e informe um preço válido."); return; }
   const updates = { name: document.getElementById("adminProductName").value.trim(), description: document.getElementById("adminProductDescription").value.trim(), color: document.getElementById("adminProductColor").value.trim(), sizes, price };
   if (!updates.name) { showMessage("adminMessage", "Informe o nome do produto."); return; }
+  const imageFile = document.getElementById("adminProductImage").files[0];
+  if (imageFile) {
+    showMessage("adminMessage", "Enviando nova foto...");
+    const filePath = `products/${crypto.randomUUID()}-${imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+    const upload = await supabaseClient.storage.from("products").upload(filePath, imageFile, { upsert: false, contentType: imageFile.type });
+    if (upload.error) {
+      console.error("Não foi possível enviar a nova foto:", upload.error);
+      showMessage("adminMessage", "Não foi possível enviar a nova foto.");
+      return;
+    }
+    const { data: publicUrl } = supabaseClient.storage.from("products").getPublicUrl(filePath);
+    updates.image_url = publicUrl.publicUrl;
+  }
   const { data: updated, error } = await supabaseClient.from("products").update(updates).eq("id", id).select().single();
   if (error) { showMessage("adminMessage", "Não foi possível salvar o preço."); return; }
   const card = document.querySelector(`.product-card[data-id="${CSS.escape(id)}"]`);
   if (card) {
     card.dataset.price = price;
     card.querySelector("h3").textContent = updated.name;
+    card.querySelector("img").src = updated.image_url;
+    card.querySelector("img").alt = updated.name;
   }
   Object.assign(product, updated);
   adminProduct.selectedOptions[0].textContent = updated.name;
   adminProduct.selectedOptions[0].dataset.price = price;
+  document.getElementById("adminProductImage").value = "";
+  document.getElementById("adminProductPreview").src = updated.image_url;
+  document.getElementById("adminProductPreview").hidden = false;
   showMessage("adminMessage", "Alterações salvas no Supabase.");
 });
 document.getElementById("newProductImage").addEventListener("change", (event) => {
