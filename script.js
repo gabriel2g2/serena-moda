@@ -172,8 +172,8 @@ function openProduct(card) {
     availableSizes: sizes
   }];
   selectedVariant = variants[0];
-  selectedModel = selectedVariant.model || "";
-  selectedColor = selectedVariant.color || "";
+  selectedModel = "";
+  selectedColor = "";
   const meta = document.getElementById("modalProductMeta");
   meta.replaceChildren();
   if (product.color && variants.length === 1) {
@@ -216,6 +216,13 @@ function normalizeVariants(variants, color, sizes) {
   }));
 }
 
+function variantStockEntries(variant) {
+  const storedStock = variant.stockBySize && typeof variant.stockBySize === "object" ? variant.stockBySize : {};
+  if (Object.keys(storedStock).length) return storedStock;
+  const legacyEntries = (Array.isArray(variant.sizes) ? variant.sizes : []).map((entry) => String(entry).split(":"));
+  return Object.fromEntries(legacyEntries.filter(([size, stock]) => size && /^\d+$/.test(stock || "")).map(([size, stock]) => [size.trim(), Number(stock)]));
+}
+
 function renderVariantEditor(containerId, variants = []) {
   const container = document.getElementById(containerId);
   container.replaceChildren();
@@ -223,13 +230,13 @@ function renderVariantEditor(containerId, variants = []) {
   rows.forEach((variant) => {
     const row = document.createElement("div");
     row.className = "admin-variant-row";
-    row.innerHTML = '<label>Modelo<input data-variant="model" placeholder="Ex.: Clássico"></label><label>Cor<input data-variant="color" placeholder="Ex.: Preto"></label><label>Tamanhos e estoque<input data-variant="stock" placeholder="P:2, M:5, G:0"></label><button class="admin-remove-variant" type="button" aria-label="Remover variação"><i class="bi bi-trash"></i></button>';
+    row.innerHTML = '<label>Modelo<input data-variant="model" placeholder="Ex.: Clássico"></label><label>Cor<input data-variant="color" placeholder="Ex.: Preto"></label><label>Tamanhos<input data-variant="sizes" placeholder="P, M, G"></label><label>Estoque<input data-variant="stock" placeholder="10, 5, 0" inputmode="numeric"></label><button class="admin-remove-variant" type="button" aria-label="Remover variação"><i class="bi bi-trash"></i></button>';
     row.querySelector('[data-variant="model"]').value = variant.model || "";
     row.querySelector('[data-variant="color"]').value = variant.color || "";
-    const stockBySize = variant.stockBySize || {};
-    row.querySelector('[data-variant="stock"]').value = Object.keys(stockBySize).length
-      ? Object.entries(stockBySize).map(([size, stock]) => `${size}:${stock}`).join(", ")
-      : (Array.isArray(variant.sizes) ? variant.sizes.map((size) => `${size}:${variant.stock ?? 0}`).join(", ") : "");
+    const stockBySize = variantStockEntries(variant);
+    const sizes = Object.keys(stockBySize).length ? Object.keys(stockBySize) : (Array.isArray(variant.sizes) ? variant.sizes : []);
+    row.querySelector('[data-variant="sizes"]').value = sizes.join(", ");
+    row.querySelector('[data-variant="stock"]').value = sizes.map((size) => stockBySize[size] ?? variant.stock ?? 0).join(", ");
     row.querySelector(".admin-remove-variant").addEventListener("click", () => {
       if (container.children.length > 1) row.remove();
     });
@@ -241,14 +248,17 @@ function readVariantEditor(containerId, fallbackColor, fallbackSizes) {
   return [...document.getElementById(containerId).children].map((row) => {
     const model = row.querySelector('[data-variant="model"]').value.trim();
     const color = row.querySelector('[data-variant="color"]').value.trim() || fallbackColor;
+    const sizeValues = parseSizes(row.querySelector('[data-variant="sizes"]').value).map((size) => size.split(":")[0].trim());
+    const stockValues = parseSizes(row.querySelector('[data-variant="stock"]').value);
     const stockBySize = {};
     let stockInvalid = false;
-    parseSizes(row.querySelector('[data-variant="stock"]').value).forEach((entry) => {
-      const [size, rawStock] = entry.split(":").map((part) => part.trim());
-      if (size && /^\d+$/.test(rawStock || "")) stockBySize[size] = Number(rawStock);
-      else if (entry) stockInvalid = true;
+    if (sizeValues.length !== stockValues.length) stockInvalid = true;
+    sizeValues.forEach((size, index) => {
+      const rawStock = stockValues[index];
+      if (/^\d+$/.test(rawStock || "")) stockBySize[size] = Number(rawStock);
+      else stockInvalid = true;
     });
-    const sizes = Object.keys(stockBySize).length ? Object.keys(stockBySize) : fallbackSizes;
+    const sizes = sizeValues.length ? sizeValues : fallbackSizes;
     return {
       model, color, sizes,
       availableSizes: sizes.filter((size) => stockBySize[size] > 0),
@@ -271,15 +281,20 @@ function renderProductOptions() {
   const variants = selectedProduct?.variants || [];
   const models = [...new Set(variants.map((variant) => variant.model).filter(Boolean))];
   const colors = [...new Set(variants.map((variant) => variant.color).filter(Boolean))];
+  const isVariantAvailable = (variant) => variant.available !== false && (variant.stock === undefined || variant.stock > 0);
+  const hasStockForSize = (variant, size) => {
+    const stockBySize = variantStockEntries(variant);
+    if (Object.keys(stockBySize).length) return Number(stockBySize[size] ?? 0) > 0;
+    return (!variant.sizes?.length || variant.sizes.includes(size)) && (variant.stock === undefined || variant.stock > 0);
+  };
   const activeVariant = variants.find((variant) =>
     (!selectedModel || variant.model === selectedModel) &&
-    (!selectedColor || variant.color === selectedColor)
+    (!selectedColor || variant.color === selectedColor) &&
+    (!selectedVariant?.selectedSize || hasStockForSize(variant, selectedVariant.selectedSize))
   ) || selectedVariant || variants[0];
   selectedVariant = activeVariant;
-  const sizes = [...new Set((activeVariant?.sizes || selectedProduct?.sizes || []).filter(Boolean))];
-  const availableSizes = activeVariant?.availableSizes || sizes;
-  const isVariantAvailable = (variant) => variant.available !== false && (variant.stock === undefined || variant.stock > 0);
-  const hasStockForSize = (variant, size) => !variant.stockBySize || Object.keys(variant.stockBySize).length === 0 || Number(variant.stockBySize[size] ?? 0) > 0;
+  const sizes = [...new Set(variants.flatMap((variant) => variant.sizes || []).filter(Boolean))];
+  const availableSizes = sizes.filter((size) => variants.some((variant) => isVariantAvailable(variant) && hasStockForSize(variant, size)));
   const addOption = (label, values, property, unavailableValues = []) => {
     const availableValues = values.filter((value) => !unavailableValues.includes(value));
     if (property !== "size" && availableValues.length <= 1) return;
@@ -306,12 +321,15 @@ function renderProductOptions() {
           renderProductOptions();
         } else if (property === "color") {
           selectedColor = value;
-          selectedVariant = variants.find((variant) => variant.color === value && (!selectedModel || variant.model === selectedModel)) ||
+          selectedVariant = variants.find((variant) => variant.color === value && (!selectedModel || variant.model === selectedModel) && hasStockForSize(variant, selectedVariant.selectedSize)) ||
             variants.find((variant) => variant.color === value);
-          selectedVariant.selectedSize = "";
+          if (selectedVariant) selectedVariant.selectedSize = document.querySelector('.product-option[data-option="size"].is-selected')?.textContent || "";
           renderProductOptions();
         } else {
           selectedVariant.selectedSize = value;
+          const matchingVariants = variants.filter((variant) => isVariantAvailable(variant) && hasStockForSize(variant, value));
+          if (matchingVariants.length === 1) selectedColor = matchingVariants[0].color || "";
+          selectedVariant = matchingVariants.find((variant) => !selectedColor || variant.color === selectedColor) || matchingVariants[0] || selectedVariant;
           renderProductOptions();
         }
 
@@ -320,8 +338,7 @@ function renderProductOptions() {
     });
     options.appendChild(fieldset);
   };
-  addOption("Modelo", models, "model", models.filter((model) => !variants.some((variant) => variant.model === model && (!selectedColor || variant.color === selectedColor) && isVariantAvailable(variant))));
-  addOption("Cor", colors, "color", colors.filter((color) => !variants.some((variant) => variant.color === color && (!selectedModel || variant.model === selectedModel) && isVariantAvailable(variant))));
+  addOption("Cor", selectedVariant?.selectedSize ? colors : [], "color", colors.filter((color) => !variants.some((variant) => variant.color === color && hasStockForSize(variant, selectedVariant.selectedSize) && isVariantAvailable(variant))));
   addOption("Tamanho", sizes, "size", sizes.filter((size) => !availableSizes.includes(size) || !hasStockForSize(activeVariant, size)));
   const valid = isVariantAvailable(activeVariant) && (!sizes.length || Boolean(activeVariant?.selectedSize));
   addButton.disabled = !valid;
