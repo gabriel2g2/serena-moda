@@ -10,6 +10,9 @@ const customerModal = document.getElementById("customerModal");
 const searchModal = document.getElementById("searchModal");
 const searchInput = document.getElementById("productSearchInput");
 const searchResults = document.getElementById("searchResults");
+function isAdminUser(user) {
+  return user?.app_metadata?.role === "admin";
+}
 let cart = [];
 let selectedProduct = null;
 let selectedVariant = null;
@@ -696,6 +699,12 @@ document.getElementById("adminLoginForm").addEventListener("submit", async (even
   const password = document.getElementById("adminPassword").value;
   const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if (error) { showMessage("loginMessage", "Não foi possível entrar. Confira e-mail e senha."); return; }
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  if (!isAdminUser(sessionData.session?.user)) {
+    await supabaseClient.auth.signOut();
+    showMessage("loginMessage", "Esta conta não possui permissão administrativa.");
+    return;
+  }
   document.getElementById("loginView").hidden = true;
   document.getElementById("adminView").hidden = false;
   updateAdminProducts();
@@ -747,7 +756,11 @@ document.getElementById("priceForm").addEventListener("submit", async (event) =>
     updates.image_url = publicUrl.publicUrl;
   }
   const { data: updated, error } = await supabaseClient.from("products").update(updates).eq("id", id).select().single();
-  if (error) { showMessage("adminMessage", "Não foi possível salvar o preço."); return; }
+  if (error) {
+    console.error("Não foi possível salvar o produto:", error);
+    showMessage("adminMessage", error.code === "PGRST116" ? "Sessão sem permissão administrativa. Saia e entre novamente com a conta administradora." : "Não foi possível salvar as alterações.");
+    return;
+  }
   const card = document.querySelector(`.product-card[data-id="${CSS.escape(id)}"]`);
   if (card) {
     card.dataset.price = price;
@@ -820,7 +833,7 @@ renderVariantEditor("newVariants");
 loadProducts().then(() => loadCustomerCart());
 if (supabaseClient) {
   supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-    if (!session || session.user.user_metadata?.admin) return;
+    if (!session || isAdminUser(session.user)) return;
     const { data } = await supabaseClient.rpc("get_customer_profile");
     if (data) {
       customer = { ...data, shipping: null };
@@ -829,7 +842,7 @@ if (supabaseClient) {
     }
   });
   supabaseClient.auth.getSession().then(({ data }) => {
-    if (data.session) {
+    if (isAdminUser(data.session?.user)) {
       document.getElementById("loginView").hidden = true;
       document.getElementById("adminView").hidden = false;
       updateAdminProducts();
