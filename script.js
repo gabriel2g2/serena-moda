@@ -16,6 +16,8 @@ function isAdminUser(user) {
 let cart = [];
 let selectedProduct = null;
 let selectedVariant = null;
+let selectedModel = "";
+let selectedColor = "";
 let products = [];
 let customer = JSON.parse(localStorage.getItem("serena-customer") || "null");
 let shippingEstimate = customer?.shipping ?? null;
@@ -170,6 +172,8 @@ function openProduct(card) {
     availableSizes: sizes
   }];
   selectedVariant = variants[0];
+  selectedModel = selectedVariant.model || "";
+  selectedColor = selectedVariant.color || "";
   const meta = document.getElementById("modalProductMeta");
   meta.replaceChildren();
   if (product.color && variants.length === 1) {
@@ -267,11 +271,18 @@ function renderProductOptions() {
   const variants = selectedProduct?.variants || [];
   const models = [...new Set(variants.map((variant) => variant.model).filter(Boolean))];
   const colors = [...new Set(variants.map((variant) => variant.color).filter(Boolean))];
-  const sizes = [...new Set((selectedVariant?.sizes || selectedProduct?.sizes || []).filter(Boolean))];
-  const availableSizes = selectedVariant?.availableSizes || sizes;
-  const isVariantAvailable = (variant) => variant.available !== false && (variant.stock === undefined || variant.stock > 0) &&
-    (!selectedVariant?.selectedSize || !variant.stockBySize || Number(variant.stockBySize[selectedVariant.selectedSize] ?? 0) > 0);
+  const activeVariant = variants.find((variant) =>
+    (!selectedModel || variant.model === selectedModel) &&
+    (!selectedColor || variant.color === selectedColor)
+  ) || selectedVariant || variants[0];
+  selectedVariant = activeVariant;
+  const sizes = [...new Set((activeVariant?.sizes || selectedProduct?.sizes || []).filter(Boolean))];
+  const availableSizes = activeVariant?.availableSizes || sizes;
+  const isVariantAvailable = (variant) => variant.available !== false && (variant.stock === undefined || variant.stock > 0);
+  const hasStockForSize = (variant, size) => !variant.stockBySize || Object.keys(variant.stockBySize).length === 0 || Number(variant.stockBySize[size] ?? 0) > 0;
   const addOption = (label, values, property, unavailableValues = []) => {
+    const availableValues = values.filter((value) => !unavailableValues.includes(value));
+    if (property !== "size" && availableValues.length <= 1) return;
     if (!values.length) return;
     const fieldset = document.createElement("fieldset");
     fieldset.className = "product-option-group";
@@ -285,10 +296,19 @@ function renderProductOptions() {
       button.textContent = value;
       button.dataset.option = property;
       button.disabled = unavailableValues.includes(value);
-      button.classList.toggle("is-selected", selectedVariant?.[property] === value || (property === "size" && selectedVariant?.selectedSize === value));
+      button.classList.toggle("is-selected", (property === "model" && selectedModel === value) || (property === "color" && selectedColor === value) || (property === "size" && selectedVariant?.selectedSize === value));
       button.addEventListener("click", () => {
-        if (property === "model" || property === "color") {
-          selectedVariant = variants.find((variant) => variant[property] === value) || selectedVariant;
+        if (property === "model") {
+          selectedModel = value;
+          selectedVariant = variants.find((variant) => variant.model === value && (!selectedColor || variant.color === selectedColor)) ||
+            variants.find((variant) => variant.model === value);
+          selectedVariant.selectedSize = "";
+          renderProductOptions();
+        } else if (property === "color") {
+          selectedColor = value;
+          selectedVariant = variants.find((variant) => variant.color === value && (!selectedModel || variant.model === selectedModel)) ||
+            variants.find((variant) => variant.color === value);
+          selectedVariant.selectedSize = "";
           renderProductOptions();
         } else {
           selectedVariant.selectedSize = value;
@@ -300,11 +320,10 @@ function renderProductOptions() {
     });
     options.appendChild(fieldset);
   };
-  addOption("Modelo", models, "model", models.filter((model) => !variants.some((variant) => variant.model === model && isVariantAvailable(variant))));
-  addOption("Cor", colors, "color", colors.filter((color) => !variants.some((variant) => variant.color === color && isVariantAvailable(variant))));
-  addOption("Tamanho", sizes, "size", sizes.filter((size) => !availableSizes.includes(size) ||
-    (selectedVariant?.stockBySize && Number(selectedVariant.stockBySize[size] ?? 0) <= 0)));
-  const valid = isVariantAvailable(selectedVariant) && (!sizes.length || Boolean(selectedVariant?.selectedSize));
+  addOption("Modelo", models, "model", models.filter((model) => !variants.some((variant) => variant.model === model && (!selectedColor || variant.color === selectedColor) && isVariantAvailable(variant))));
+  addOption("Cor", colors, "color", colors.filter((color) => !variants.some((variant) => variant.color === color && (!selectedModel || variant.model === selectedModel) && isVariantAvailable(variant))));
+  addOption("Tamanho", sizes, "size", sizes.filter((size) => !availableSizes.includes(size) || !hasStockForSize(activeVariant, size)));
+  const valid = isVariantAvailable(activeVariant) && (!sizes.length || Boolean(activeVariant?.selectedSize));
   addButton.disabled = !valid;
   document.getElementById("productSelectionMessage").textContent = valid ? "" : "Selecione um tamanho disponível para continuar.";
 }
