@@ -17,6 +17,14 @@ alter table public.products add column if not exists sizes text[] not null defau
 
 alter table public.products enable row level security;
 
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+as $$
+  select coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin';
+$$;
+
 drop policy if exists "Public can view active products" on public.products;
 create policy "Public can view active products"
 on public.products for select
@@ -24,33 +32,33 @@ to anon, authenticated
 using (active = true);
 
 drop policy if exists "Authenticated users can insert products" on public.products;
-create policy "Authenticated users can insert products"
+create policy "Administrators can insert products"
 on public.products for insert
 to authenticated
-with check (true);
+with check (public.is_admin());
 
 drop policy if exists "Authenticated users can update products" on public.products;
-create policy "Authenticated users can update products"
+create policy "Administrators can update products"
 on public.products for update
 to authenticated
-using (true)
-with check (true);
+using (public.is_admin())
+with check (public.is_admin());
 
 drop policy if exists "Authenticated users can delete products" on public.products;
-create policy "Authenticated users can delete products"
+create policy "Administrators can delete products"
 on public.products for delete
 to authenticated
-using (true);
+using (public.is_admin());
 
 insert into storage.buckets (id, name, public)
 values ('products', 'products', true)
 on conflict (id) do update set public = excluded.public;
 
 drop policy if exists "Authenticated users can upload product images" on storage.objects;
-create policy "Authenticated users can upload product images"
+create policy "Administrators can upload product images"
 on storage.objects for insert
 to authenticated
-with check (bucket_id = 'products');
+with check (bucket_id = 'products' and public.is_admin());
 
 drop policy if exists "Public can view product images" on storage.objects;
 create policy "Public can view product images"
@@ -59,17 +67,17 @@ to anon, authenticated
 using (bucket_id = 'products');
 
 drop policy if exists "Authenticated users can update product images" on storage.objects;
-create policy "Authenticated users can update product images"
+create policy "Administrators can update product images"
 on storage.objects for update
 to authenticated
-using (bucket_id = 'products')
-with check (bucket_id = 'products');
+using (bucket_id = 'products' and public.is_admin())
+with check (bucket_id = 'products' and public.is_admin());
 
 drop policy if exists "Authenticated users can delete product images" on storage.objects;
-create policy "Authenticated users can delete product images"
+create policy "Administrators can delete product images"
 on storage.objects for delete
 to authenticated
-using (bucket_id = 'products');
+using (bucket_id = 'products' and public.is_admin());
 
 insert into public.products (name, category, image_url)
 select seed.name, seed.category, seed.image_url
@@ -237,7 +245,7 @@ begin
     address, number, complement, neighborhood
   )
   values (
-    'SERENA-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
+    'SERENA-' || upper(replace(gen_random_uuid()::text, '-', '')),
     trim(customer_data->>'name'), trim(customer_data->>'phone'),
     lower(trim(customer_data->>'email')), nullif(trim(customer_data->>'document'), ''),
     trim(customer_data->>'zip'), upper(trim(customer_data->>'state')),
@@ -334,29 +342,68 @@ as $$
 declare
   customer_record public.customers;
   new_order public.orders;
+  product_record public.products;
   item jsonb;
+  calculated_subtotal numeric(10,2) := 0;
+  calculated_shipping numeric(10,2) := 0;
+  item_quantity integer;
 begin
   select * into customer_record from public.customers where access_code = customer_code;
   if not found then raise exception 'Cliente não encontrado'; end if;
 
+  for item in select * from jsonb_array_elements(order_data->'items') loop
+    item_quantity := (item->>'quantity')::integer;
+    if item_quantity is null or item_quantity < 1 or item_quantity > 99 then
+      raise exception 'Quantidade de produto inválida';
+    end if;
+    select * into product_record
+    from public.products
+    where id = (item->>'id')::uuid and active = true;
+    if not found or product_record.price is null then
+      raise exception 'Produto indisponível ou sem preço';
+    end if;
+    calculated_subtotal := calculated_subtotal + (product_record.price * item_quantity);
+  end loop;
+
+  if calculated_subtotal >= 199 then
+    calculated_shipping := 0;
+  else
+    calculated_shipping := case left(customer_record.zip, 1)
+      when '0' then 14.90 when '1' then 14.90 when '2' then 19.90
+      when '3' then 21.90 when '4' then 27.90 when '5' then 29.90
+      when '6' then 31.90 when '7' then 24.90 when '8' then 22.90
+      when '9' then 24.90 else 0 end;
+  end if;
+
   insert into public.orders(customer_id, subtotal, shipping, total, shipping_address)
   values (
-    customer_record.id, (order_data->>'subtotal')::numeric,
-    (order_data->>'shipping')::numeric, (order_data->>'total')::numeric,
-    order_data->'shipping_address'
+    customer_record.id, calculated_subtotal, calculated_shipping,
+    calculated_subtotal + calculated_shipping,
+    jsonb_build_object(
+      'zip', customer_record.zip, 'state', customer_record.state,
+      'city', customer_record.city, 'address', customer_record.address,
+      'number', customer_record.number, 'complement', customer_record.complement,
+      'neighborhood', customer_record.neighborhood
+    )
   )
   returning * into new_order;
 
   for item in select * from jsonb_array_elements(order_data->'items') loop
+    select * into product_record from public.products
+    where id = (item->>'id')::uuid and active = true;
     insert into public.order_items(order_id, product_id, product_name, unit_price, quantity)
     values (
-      new_order.id, (item->>'id')::uuid, item->>'name',
-      (item->>'price')::numeric, (item->>'quantity')::integer
+      new_order.id, product_record.id, product_record.name,
+      product_record.price, (item->>'quantity')::integer
     );
   end loop;
 
   delete from public.cart_items where customer_id = customer_record.id;
-  return jsonb_build_object('id', new_order.id, 'status', new_order.status);
+  return jsonb_build_object(
+    'id', new_order.id, 'status', new_order.status,
+    'subtotal', calculated_subtotal, 'shipping', calculated_shipping,
+    'total', calculated_subtotal + calculated_shipping
+  );
 end;
 $$;
 

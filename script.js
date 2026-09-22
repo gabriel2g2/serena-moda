@@ -63,10 +63,18 @@ function renderSearchResults(query) {
     const result = document.createElement("button");
     result.type = "button";
     result.className = "search-result";
-    result.innerHTML = `<img src="${product.image_url}" alt=""><span><strong></strong><small></small></span><i class="bi bi-arrow-up-right"></i>`;
-    result.querySelector("img").alt = product.name;
-    result.querySelector("strong").textContent = product.name;
-    result.querySelector("small").textContent = `${product.category}${product.color ? ` · ${product.color}` : ""}`;
+    const image = document.createElement("img");
+    image.src = safeImageUrl(product.image_url);
+    image.alt = product.name;
+    const text = document.createElement("span");
+    const name = document.createElement("strong");
+    name.textContent = product.name;
+    const detail = document.createElement("small");
+    detail.textContent = `${product.category}${product.color ? ` · ${product.color}` : ""}`;
+    text.append(name, detail);
+    const arrow = document.createElement("i");
+    arrow.className = "bi bi-arrow-up-right";
+    result.append(image, text, arrow);
     result.addEventListener("click", () => {
       closeSearch();
       const card = document.querySelector(`.product-card[data-id="${CSS.escape(product.id)}"]`);
@@ -88,13 +96,34 @@ function filterCatalog(selected) {
   catalog.scrollTo({ left: 0, behavior: "smooth" });
 }
 
+function safeImageUrl(value) {
+  try {
+    const url = new URL(value, window.location.href);
+    return ["https:", "http:", "file:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 function addProductCard(product) {
   const card = document.createElement("article");
   card.className = "product-card";
   card.dataset.id = product.id || "";
   card.dataset.category = product.category;
   card.dataset.price = product.price ?? "";
-  card.innerHTML = `<img src="${product.image_url || product.image}" alt="${product.name}"><div class="product-info"><span>${product.category}</span><h3>${product.name}</h3><strong>Ver produto</strong></div>`;
+  const image = document.createElement("img");
+  image.src = safeImageUrl(product.image_url || product.image);
+  image.alt = product.name;
+  const info = document.createElement("div");
+  info.className = "product-info";
+  const category = document.createElement("span");
+  category.textContent = product.category;
+  const name = document.createElement("h3");
+  name.textContent = product.name;
+  const action = document.createElement("strong");
+  action.textContent = "Ver produto";
+  info.append(category, name, action);
+  card.append(image, info);
   catalog.appendChild(card);
 }
 
@@ -127,7 +156,24 @@ function openProduct(card) {
   document.getElementById("modalProductName").textContent = name;
   document.getElementById("modalProductDescription").textContent = product.description || "Uma escolha Serena para deixar seus dias mais bonitos e confortáveis.";
   const sizes = Array.isArray(product.sizes) ? product.sizes : [];
-  document.getElementById("modalProductMeta").innerHTML = `${product.color ? `<span><b>Cor:</b> ${product.color}</span>` : ""}${sizes.length ? `<span><b>Tamanhos:</b> ${sizes.join(", ")}</span>` : ""}`;
+  const meta = document.getElementById("modalProductMeta");
+  meta.replaceChildren();
+  if (product.color) {
+    const color = document.createElement("span");
+    const colorLabel = document.createElement("b");
+    colorLabel.textContent = "Cor: ";
+    color.appendChild(colorLabel);
+    color.append(document.createTextNode(product.color));
+    meta.appendChild(color);
+  }
+  if (sizes.length) {
+    const size = document.createElement("span");
+    const sizeLabel = document.createElement("b");
+    sizeLabel.textContent = "Tamanhos: ";
+    size.appendChild(sizeLabel);
+    size.append(document.createTextNode(sizes.join(", ")));
+    meta.appendChild(size);
+  }
   document.getElementById("modalProductPrice").textContent = price ? formatPrice(price) : "Preço a definir";
   selectedProduct = { id: card.dataset.id || image.src, name, category, image: image.src, price, description: product.description || "", color: product.color || "", sizes };
   productModal.classList.add("is-open");
@@ -152,11 +198,46 @@ function closeProductModal() {
 document.querySelectorAll("[data-close-modal]").forEach((element) => element.addEventListener("click", closeProductModal));
 
 function renderCart() {
-  cartItems.innerHTML = cart.length ? "" : '<p class="cart-empty">Sua sacola está vazia.</p>';
+  cartItems.replaceChildren();
+  if (!cart.length) {
+    const empty = document.createElement("p");
+    empty.className = "cart-empty";
+    empty.textContent = "Sua sacola está vazia.";
+    cartItems.appendChild(empty);
+  }
   cart.forEach((item) => {
     const row = document.createElement("div");
     row.className = "cart-item";
-    row.innerHTML = `<img src="${item.image}" alt="${item.name}"><div class="cart-item-info"><strong>${item.name}</strong><small>${item.category}</small><span>${item.price ? formatPrice(item.price) : "Preço a definir"}</span><div class="quantity-control"><button data-action="decrease" aria-label="Diminuir quantidade">−</button><b>${item.quantity}</b><button data-action="increase" aria-label="Aumentar quantidade">+</button><button class="remove-item" data-action="remove">Remover</button></div></div>`;
+    const image = document.createElement("img");
+    image.src = safeImageUrl(item.image);
+    image.alt = item.name;
+    const info = document.createElement("div");
+    info.className = "cart-item-info";
+    const name = document.createElement("strong");
+    name.textContent = item.name;
+    const category = document.createElement("small");
+    category.textContent = item.category;
+    const price = document.createElement("span");
+    price.textContent = item.price ? formatPrice(item.price) : "Preço a definir";
+    const controls = document.createElement("div");
+    controls.className = "quantity-control";
+    const decrease = document.createElement("button");
+    decrease.dataset.action = "decrease";
+    decrease.setAttribute("aria-label", "Diminuir quantidade");
+    decrease.textContent = "−";
+    const quantity = document.createElement("b");
+    quantity.textContent = item.quantity;
+    const increase = document.createElement("button");
+    increase.dataset.action = "increase";
+    increase.setAttribute("aria-label", "Aumentar quantidade");
+    increase.textContent = "+";
+    const remove = document.createElement("button");
+    remove.className = "remove-item";
+    remove.dataset.action = "remove";
+    remove.textContent = "Remover";
+    controls.append(decrease, quantity, increase, remove);
+    info.append(name, category, price, controls);
+    row.append(image, info);
     row.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => updateCart(item.id, button.dataset.action)));
     cartItems.appendChild(row);
   });
@@ -383,11 +464,26 @@ document.getElementById("customerHistoryButton").addEventListener("click", async
     history.innerHTML = "<p>Não foi possível carregar suas compras.</p>";
     return;
   }
-  history.innerHTML = data?.length ? data.map((order) => {
+  history.replaceChildren();
+  if (!data?.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "Você ainda não possui compras registradas.";
+    history.appendChild(empty);
+    return;
+  }
+  data.forEach((order) => {
     const date = new Date(order.created_at).toLocaleDateString("pt-BR");
     const items = order.items.map((item) => `${item.quantity}x ${item.name}`).join(", ");
-    return `<article><strong>Pedido de ${date}</strong><br><small>${items}</small><br><span>${formatPrice(Number(order.total))} · ${order.status === "pending" ? "Aguardando confirmação" : order.status}</span></article>`;
-  }).join("") : '<p><i class="bi bi-info-circle me-2"></i>Você ainda não possui compras registradas.</p>';
+    const article = document.createElement("article");
+    const title = document.createElement("strong");
+    title.textContent = `Pedido de ${date}`;
+    const itemList = document.createElement("small");
+    itemList.textContent = items;
+    const total = document.createElement("span");
+    total.textContent = `${formatPrice(Number(order.total))} · ${order.status === "pending" ? "Aguardando confirmação" : order.status}`;
+    article.append(title, document.createElement("br"), itemList, document.createElement("br"), total);
+    history.appendChild(article);
+  });
 });
 document.getElementById("customerLogout").addEventListener("click", () => {
   customer = null;
