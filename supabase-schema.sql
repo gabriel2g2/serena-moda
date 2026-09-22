@@ -26,18 +26,21 @@ as $$
 $$;
 
 drop policy if exists "Public can view active products" on public.products;
+drop policy if exists "Administrators can view active products" on public.products;
 create policy "Public can view active products"
 on public.products for select
 to anon, authenticated
 using (active = true);
 
 drop policy if exists "Authenticated users can insert products" on public.products;
+drop policy if exists "Administrators can insert products" on public.products;
 create policy "Administrators can insert products"
 on public.products for insert
 to authenticated
 with check (public.is_admin());
 
 drop policy if exists "Authenticated users can update products" on public.products;
+drop policy if exists "Administrators can update products" on public.products;
 create policy "Administrators can update products"
 on public.products for update
 to authenticated
@@ -45,6 +48,7 @@ using (public.is_admin())
 with check (public.is_admin());
 
 drop policy if exists "Authenticated users can delete products" on public.products;
+drop policy if exists "Administrators can delete products" on public.products;
 create policy "Administrators can delete products"
 on public.products for delete
 to authenticated
@@ -55,18 +59,21 @@ values ('products', 'products', true)
 on conflict (id) do update set public = excluded.public;
 
 drop policy if exists "Authenticated users can upload product images" on storage.objects;
+drop policy if exists "Administrators can upload product images" on storage.objects;
 create policy "Administrators can upload product images"
 on storage.objects for insert
 to authenticated
 with check (bucket_id = 'products' and public.is_admin());
 
 drop policy if exists "Public can view product images" on storage.objects;
+drop policy if exists "Administrators can view product images" on storage.objects;
 create policy "Public can view product images"
 on storage.objects for select
 to anon, authenticated
 using (bucket_id = 'products');
 
 drop policy if exists "Authenticated users can update product images" on storage.objects;
+drop policy if exists "Administrators can update product images" on storage.objects;
 create policy "Administrators can update product images"
 on storage.objects for update
 to authenticated
@@ -74,6 +81,7 @@ using (bucket_id = 'products' and public.is_admin())
 with check (bucket_id = 'products' and public.is_admin());
 
 drop policy if exists "Authenticated users can delete product images" on storage.objects;
+drop policy if exists "Administrators can delete product images" on storage.objects;
 create policy "Administrators can delete product images"
 on storage.objects for delete
 to authenticated
@@ -451,6 +459,11 @@ $$;
 
 revoke all on function public.create_customer(jsonb) from public;
 revoke all on function public.login_customer(text, text) from public;
+drop function if exists public.login_customer(text, text);
+drop function if exists public.save_customer_cart(text, jsonb);
+drop function if exists public.load_customer_cart(text);
+drop function if exists public.create_customer_order(text, jsonb);
+drop function if exists public.list_customer_orders(text);
 revoke all on function public.get_customer_profile() from public;
 revoke all on function public.save_customer_cart(jsonb) from public;
 revoke all on function public.load_customer_cart() from public;
