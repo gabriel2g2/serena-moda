@@ -7,6 +7,9 @@ const cartTotal = document.getElementById("cartTotal");
 const adminModal = document.getElementById("adminModal");
 const adminProduct = document.getElementById("adminProduct");
 const customerModal = document.getElementById("customerModal");
+const searchModal = document.getElementById("searchModal");
+const searchInput = document.getElementById("productSearchInput");
+const searchResults = document.getElementById("searchResults");
 let cart = [];
 let selectedProduct = null;
 let products = [];
@@ -30,6 +33,54 @@ function showMessage(id, text) {
 function productCards() {
   return [...document.querySelectorAll(".product-card")];
 }
+
+function openSearch() {
+  searchModal.classList.add("is-open");
+  searchModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  searchInput.value = "";
+  renderSearchResults("");
+  window.setTimeout(() => searchInput.focus(), 50);
+}
+function closeSearch() {
+  searchModal.classList.remove("is-open");
+  searchModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+function renderSearchResults(query) {
+  const normalized = query.trim().toLocaleLowerCase("pt-BR");
+  const matches = normalized ? products.filter((product) => [product.name, product.category, product.description, product.color, ...(product.sizes || [])].join(" ").toLocaleLowerCase("pt-BR").includes(normalized)) : [];
+  if (!normalized) {
+    searchResults.innerHTML = '<p class="search-empty">Digite para encontrar uma peça Serena.</p>';
+    return;
+  }
+  if (!matches.length) {
+    searchResults.innerHTML = '<p class="search-empty">Nenhum produto encontrado. Tente outro nome ou categoria.</p>';
+    return;
+  }
+  searchResults.innerHTML = "";
+  matches.forEach((product) => {
+    const result = document.createElement("button");
+    result.type = "button";
+    result.className = "search-result";
+    result.innerHTML = `<img src="${product.image_url}" alt=""><span><strong></strong><small></small></span><i class="bi bi-arrow-up-right"></i>`;
+    result.querySelector("img").alt = product.name;
+    result.querySelector("strong").textContent = product.name;
+    result.querySelector("small").textContent = `${product.category}${product.color ? ` · ${product.color}` : ""}`;
+    result.addEventListener("click", () => {
+      closeSearch();
+      const card = document.querySelector(`.product-card[data-id="${CSS.escape(product.id)}"]`);
+      if (card) {
+        card.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+        window.setTimeout(() => openProduct(card), 350);
+      }
+    });
+    searchResults.appendChild(result);
+  });
+}
+document.getElementById("searchButton").addEventListener("click", openSearch);
+document.querySelectorAll("[data-close-search]").forEach((element) => element.addEventListener("click", closeSearch));
+searchInput.addEventListener("input", () => renderSearchResults(searchInput.value));
 
 function filterCatalog(selected) {
   document.querySelectorAll(".catalog-filter").forEach((item) => item.classList.toggle("active", item.dataset.filter === selected));
@@ -493,7 +544,7 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
   document.getElementById("adminLoginForm").reset();
   closeAdmin();
 });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); } });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); closeSearch(); } });
 renderCart();
 updateCustomerHeader();
 loadProducts().then(() => loadCustomerCart());

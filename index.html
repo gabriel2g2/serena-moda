@@ -34,7 +34,7 @@
               <li class="nav-item"><a class="nav-link" href="#contato">Contato</a></li>
             </ul>
             <div class="nav-actions d-flex gap-3">
-              <button class="icon-button" aria-label="Buscar"><i class="bi bi-search"></i></button>
+              <button class="icon-button" id="searchButton" type="button" aria-label="Buscar produtos"><i class="bi bi-search"></i></button>
               <button class="icon-button customer-account-button" id="customerAccountButton" type="button" aria-label="Minha conta"><i class="bi bi-person"></i><span id="customerNameDisplay"></span></button>
               <button class="icon-button position-relative" id="cartButton" aria-label="Abrir sacola"><i class="bi bi-bag"></i><span class="bag-count">0</span></button>
             </div>
@@ -42,6 +42,15 @@
         </div>
       </nav>
     </header>
+
+    <div class="search-modal" id="searchModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="searchTitle">
+      <div class="search-backdrop" data-close-search></div>
+      <div class="search-panel">
+        <div class="search-header"><div><p class="eyebrow">Encontre seu estilo</p><h2 id="searchTitle">Buscar produtos</h2></div><button class="modal-close" type="button" aria-label="Fechar busca" data-close-search><i class="bi bi-x-lg"></i></button></div>
+        <label class="search-input-wrap"><i class="bi bi-search"></i><input id="productSearchInput" type="search" placeholder="Busque por nome, cor ou categoria..." autocomplete="off"></label>
+        <div class="search-results" id="searchResults" aria-live="polite"><p class="search-empty">Digite para encontrar uma peça Serena.</p></div>
+      </div>
+    </div>
 
     <main id="inicio">
       <section class="hero container-fluid p-0">
