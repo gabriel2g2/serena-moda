@@ -251,6 +251,12 @@ function readVariantEditor(containerId, fallbackColor, fallbackSizes) {
   }).filter((variant) => variant.model || variant.color || variant.sizes.length);
 }
 
+function variantProductFields(variants) {
+  const color = variants.find((variant) => variant.color)?.color || "";
+  const sizes = [...new Set(variants.flatMap((variant) => variant.sizes || []))];
+  return { color, sizes };
+}
+
 function renderProductOptions() {
   const options = document.getElementById("productOptions");
   const addButton = document.getElementById("addToCartButton");
@@ -679,8 +685,6 @@ function populateAdminProduct() {
   document.getElementById("adminProductCategory").value = product.category || "outras";
   document.getElementById("adminPrice").value = product.price ?? "";
   document.getElementById("adminProductDescription").value = product.description || "";
-  document.getElementById("adminProductColor").value = product.color || "";
-  document.getElementById("adminProductSizes").value = Array.isArray(product.sizes) ? product.sizes.join(", ") : "";
   renderVariantEditor("adminVariants", normalizeVariants(product.variants, product.color, product.sizes || []));
 }
 document.getElementById("adminButton").addEventListener("click", openAdmin);
@@ -700,11 +704,11 @@ adminProduct.addEventListener("change", () => {
   populateAdminProduct();
 });
 document.getElementById("addAdminVariant").addEventListener("click", () => {
-  const current = readVariantEditor("adminVariants", document.getElementById("adminProductColor").value.trim(), parseSizes(document.getElementById("adminProductSizes").value));
+  const current = readVariantEditor("adminVariants", "", []);
   renderVariantEditor("adminVariants", [...current, {}]);
 });
 document.getElementById("addNewVariant").addEventListener("click", () => {
-  const current = readVariantEditor("newVariants", document.getElementById("newProductColor").value.trim(), parseSizes(document.getElementById("newProductSizes").value));
+  const current = readVariantEditor("newVariants", "", []);
   renderVariantEditor("newVariants", [...current, {}]);
 });
 document.getElementById("adminProductImage").addEventListener("change", (event) => {
@@ -722,12 +726,12 @@ document.getElementById("priceForm").addEventListener("submit", async (event) =>
   const id = adminProduct.value;
   const price = Number(document.getElementById("adminPrice").value);
   const product = products.find((item) => item.id === id);
-  const sizes = parseSizes(document.getElementById("adminProductSizes").value);
   if (!id || !product || Number.isNaN(price) || price < 0) { showMessage("adminMessage", "Selecione um produto e informe um preço válido."); return; }
-  const variants = readVariantEditor("adminVariants", document.getElementById("adminProductColor").value.trim(), sizes);
+  const variants = readVariantEditor("adminVariants", product.color || "", product.sizes || []);
   if (variants.some((variant) => variant.stockInvalid || Object.values(variant.stockBySize).some((stock) => !Number.isInteger(stock) || stock < 0))) { showMessage("adminMessage", "O estoque deve usar números inteiros iguais ou maiores que zero."); return; }
   const variantsToSave = variants.map(({ stockInvalid, ...variant }) => variant);
-  const updates = { name: document.getElementById("adminProductName").value.trim(), category: document.getElementById("adminProductCategory").value, description: document.getElementById("adminProductDescription").value.trim(), color: document.getElementById("adminProductColor").value.trim(), sizes, variants: variantsToSave, price };
+  const productFields = variantProductFields(variantsToSave);
+  const updates = { name: document.getElementById("adminProductName").value.trim(), category: document.getElementById("adminProductCategory").value, description: document.getElementById("adminProductDescription").value.trim(), color: productFields.color, sizes: productFields.sizes, variants: variantsToSave, price };
   if (!updates.name) { showMessage("adminMessage", "Informe o nome do produto."); return; }
   const imageFile = document.getElementById("adminProductImage").files[0];
   if (imageFile) {
@@ -773,8 +777,7 @@ document.getElementById("newProductForm").addEventListener("submit", async (even
   const file = document.getElementById("newProductImage").files[0];
   const priceValue = document.getElementById("newProductPrice").value;
   const price = priceValue ? Number(priceValue) : null;
-  const sizes = parseSizes(document.getElementById("newProductSizes").value);
-  const variants = readVariantEditor("newVariants", document.getElementById("newProductColor").value.trim(), sizes);
+  const variants = readVariantEditor("newVariants", "", []);
   if (!name || !file || price === null || Number.isNaN(price) || price < 0) { showMessage("newProductMessage", "Informe nome, imagem e um preço válido."); return; }
   if (variants.some((variant) => variant.stockInvalid || Object.values(variant.stockBySize).some((stock) => !Number.isInteger(stock) || stock < 0))) { showMessage("newProductMessage", "O estoque deve usar números inteiros iguais ou maiores que zero."); return; }
   const variantsToSave = variants.map(({ stockInvalid, ...variant }) => variant);
@@ -782,7 +785,8 @@ document.getElementById("newProductForm").addEventListener("submit", async (even
   const upload = await supabaseClient.storage.from("products").upload(filePath, file, { upsert: false, contentType: file.type });
   if (upload.error) { showMessage("newProductMessage", "Não foi possível enviar a imagem."); return; }
   const { data: publicUrl } = supabaseClient.storage.from("products").getPublicUrl(filePath);
-  const insert = await supabaseClient.from("products").insert({ name, category, image_url: publicUrl.publicUrl, price, description: document.getElementById("newProductDescription").value.trim(), color: document.getElementById("newProductColor").value.trim(), sizes, variants: variantsToSave }).select().single();
+  const productFields = variantProductFields(variantsToSave);
+  const insert = await supabaseClient.from("products").insert({ name, category, image_url: publicUrl.publicUrl, price, description: document.getElementById("newProductDescription").value.trim(), color: productFields.color, sizes: productFields.sizes, variants: variantsToSave }).select().single();
   if (insert.error) { showMessage("newProductMessage", "Imagem enviada, mas não foi possível salvar o produto."); return; }
   addProductCard(insert.data);
   products.push(insert.data);
