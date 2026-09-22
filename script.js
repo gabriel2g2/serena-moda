@@ -249,14 +249,13 @@ function renderCart() {
 async function syncCart() {
   if (!customer?.code || !supabaseClient) return;
   const { error } = await supabaseClient.rpc("save_customer_cart", {
-    customer_code: customer.code,
     cart_data: cart.map((item) => ({ id: item.id, quantity: item.quantity }))
   });
   if (error) console.error("Não foi possível sincronizar a sacola:", error);
 }
 async function loadCustomerCart() {
   if (!customer?.code || !supabaseClient) return;
-  const { data, error } = await supabaseClient.rpc("load_customer_cart", { customer_code: customer.code });
+  const { data, error } = await supabaseClient.rpc("load_customer_cart");
   if (error) {
     console.error("Não foi possível carregar a sacola:", error);
     return;
@@ -304,7 +303,6 @@ async function checkout() {
     return;
   }
   const { error } = await supabaseClient.rpc("create_customer_order", {
-    customer_code: customer.code,
     order_data: {
       subtotal,
       shipping: shippingEstimate,
@@ -374,10 +372,15 @@ customerLoginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = document.getElementById("customerLoginMessage");
   message.textContent = "Entrando...";
-  const { data, error } = await supabaseClient.rpc("login_customer", {
-    customer_email: document.getElementById("customerLoginEmail").value,
-    customer_code: document.getElementById("customerLoginCode").value
+  const { error: loginError } = await supabaseClient.auth.signInWithPassword({
+    email: document.getElementById("customerLoginEmail").value,
+    password: document.getElementById("customerLoginPassword").value
   });
+  if (loginError) {
+    message.textContent = "E-mail ou senha inválidos.";
+    return;
+  }
+  const { data, error } = await supabaseClient.rpc("get_customer_profile");
   if (error) {
     console.error("Não foi possível entrar na conta:", error);
     message.textContent = "E-mail ou código de acesso inválido.";
@@ -441,6 +444,17 @@ document.getElementById("customerForm").addEventListener("submit", async (event)
   event.preventDefault();
   const formData = new FormData(event.target);
   const formValues = Object.fromEntries(formData.entries());
+  const password = formValues.password;
+  delete formValues.password;
+  const { data: authData, error: authError } = await supabaseClient.auth.signUp({ email: formValues.email, password });
+  if (authError) {
+    document.getElementById("customerMessage").textContent = "Não foi possível criar a conta. Verifique o e-mail e tente novamente.";
+    return;
+  }
+  if (!authData.session) {
+    document.getElementById("customerMessage").textContent = "Conta criada. Confirme seu e-mail para continuar.";
+    return;
+  }
   const { data, error } = await supabaseClient.rpc("create_customer", { customer_data: formValues });
   if (error) {
     console.error("Não foi possível cadastrar cliente:", error);
@@ -458,7 +472,7 @@ document.getElementById("customerHistoryButton").addEventListener("click", async
   const history = document.getElementById("customerHistory");
   history.hidden = false;
   history.innerHTML = "<p>Carregando compras...</p>";
-  const { data, error } = await supabaseClient.rpc("list_customer_orders", { customer_code: customer.code });
+  const { data, error } = await supabaseClient.rpc("list_customer_orders");
   if (error) {
     console.error("Não foi possível carregar compras:", error);
     history.innerHTML = "<p>Não foi possível carregar suas compras.</p>";
@@ -488,6 +502,7 @@ document.getElementById("customerHistoryButton").addEventListener("click", async
 document.getElementById("customerLogout").addEventListener("click", () => {
   customer = null;
   localStorage.removeItem("serena-customer");
+  supabaseClient?.auth.signOut();
   updateCustomerHeader();
   closeCustomerModal();
 });
@@ -645,6 +660,15 @@ renderCart();
 updateCustomerHeader();
 loadProducts().then(() => loadCustomerCart());
 if (supabaseClient) {
+  supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+    if (!session || session.user.user_metadata?.admin) return;
+    const { data } = await supabaseClient.rpc("get_customer_profile");
+    if (data) {
+      customer = { ...data, shipping: null };
+      localStorage.setItem("serena-customer", JSON.stringify(customer));
+      updateCustomerHeader();
+    }
+  });
   supabaseClient.auth.getSession().then(({ data }) => {
     if (data.session) {
       document.getElementById("loginView").hidden = true;

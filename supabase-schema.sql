@@ -180,6 +180,7 @@ where name = 'Jaqueta Couro';
 
 create table if not exists public.customers (
   id uuid primary key default gen_random_uuid(),
+  auth_user_id uuid unique references auth.users(id) on delete cascade,
   access_code text not null unique,
   name text not null,
   phone text not null,
@@ -195,6 +196,8 @@ create table if not exists public.customers (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.customers add column if not exists auth_user_id uuid unique references auth.users(id) on delete cascade;
 
 create table if not exists public.cart_items (
   customer_id uuid not null references public.customers(id) on delete cascade,
@@ -240,12 +243,13 @@ as $$
 declare
   saved_customer public.customers;
 begin
+  if auth.uid() is null then raise exception 'É necessário estar autenticado'; end if;
   insert into public.customers (
-    access_code, name, phone, email, document, zip, state, city,
+    auth_user_id, access_code, name, phone, email, document, zip, state, city,
     address, number, complement, neighborhood
   )
   values (
-    'SERENA-' || upper(replace(gen_random_uuid()::text, '-', '')),
+    auth.uid(), 'SERENA-' || upper(replace(gen_random_uuid()::text, '-', '')),
     trim(customer_data->>'name'), trim(customer_data->>'phone'),
     lower(trim(customer_data->>'email')), nullif(trim(customer_data->>'document'), ''),
     trim(customer_data->>'zip'), upper(trim(customer_data->>'state')),
@@ -265,6 +269,22 @@ begin
     'neighborhood', saved_customer.neighborhood
   );
 end;
+$$;
+
+create or replace function public.get_customer_profile()
+returns jsonb
+language sql
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'id', c.id, 'code', c.access_code, 'name', c.name, 'phone', c.phone,
+    'email', c.email, 'document', c.document, 'zip', c.zip, 'state', c.state,
+    'city', c.city, 'address', c.address, 'number', c.number,
+    'complement', c.complement, 'neighborhood', c.neighborhood
+  )
+  from public.customers c
+  where c.auth_user_id = auth.uid();
 $$;
 
 create or replace function public.login_customer(customer_email text, customer_code text)
@@ -299,7 +319,7 @@ begin
 end;
 $$;
 
-create or replace function public.save_customer_cart(customer_code text, cart_data jsonb)
+create or replace function public.save_customer_cart(cart_data jsonb)
 returns void
 language plpgsql
 security definer
@@ -309,7 +329,7 @@ declare
   customer_record public.customers;
   item jsonb;
 begin
-  select * into customer_record from public.customers where access_code = customer_code;
+  select * into customer_record from public.customers where auth_user_id = auth.uid();
   if not found then raise exception 'Cliente não encontrado'; end if;
   delete from public.cart_items where customer_id = customer_record.id;
   for item in select * from jsonb_array_elements(coalesce(cart_data, '[]'::jsonb)) loop
@@ -321,7 +341,7 @@ begin
 end;
 $$;
 
-create or replace function public.load_customer_cart(customer_code text)
+create or replace function public.load_customer_cart()
 returns jsonb
 language sql
 security definer
@@ -330,10 +350,10 @@ as $$
   select coalesce(jsonb_agg(jsonb_build_object('id', ci.product_id, 'quantity', ci.quantity)), '[]'::jsonb)
   from public.cart_items ci
   join public.customers c on c.id = ci.customer_id
-  where c.access_code = customer_code;
+  where c.auth_user_id = auth.uid();
 $$;
 
-create or replace function public.create_customer_order(customer_code text, order_data jsonb)
+create or replace function public.create_customer_order(order_data jsonb)
 returns jsonb
 language plpgsql
 security definer
@@ -348,7 +368,7 @@ declare
   calculated_shipping numeric(10,2) := 0;
   item_quantity integer;
 begin
-  select * into customer_record from public.customers where access_code = customer_code;
+  select * into customer_record from public.customers where auth_user_id = auth.uid();
   if not found then raise exception 'Cliente não encontrado'; end if;
 
   for item in select * from jsonb_array_elements(order_data->'items') loop
@@ -407,7 +427,7 @@ begin
 end;
 $$;
 
-create or replace function public.list_customer_orders(customer_code text)
+create or replace function public.list_customer_orders()
 returns table(
   id uuid, status text, subtotal numeric, shipping numeric, total numeric,
   created_at timestamptz, items jsonb
@@ -425,19 +445,20 @@ as $$
     ) as items
   from public.orders o
   join public.customers c on c.id = o.customer_id
-  where c.access_code = customer_code
+  where c.auth_user_id = auth.uid()
   order by o.created_at desc;
 $$;
 
 revoke all on function public.create_customer(jsonb) from public;
 revoke all on function public.login_customer(text, text) from public;
-revoke all on function public.save_customer_cart(text, jsonb) from public;
-revoke all on function public.load_customer_cart(text) from public;
-revoke all on function public.create_customer_order(text, jsonb) from public;
-revoke all on function public.list_customer_orders(text) from public;
-grant execute on function public.create_customer(jsonb) to anon, authenticated;
-grant execute on function public.login_customer(text, text) to anon, authenticated;
-grant execute on function public.save_customer_cart(text, jsonb) to anon, authenticated;
-grant execute on function public.load_customer_cart(text) to anon, authenticated;
-grant execute on function public.create_customer_order(text, jsonb) to anon, authenticated;
-grant execute on function public.list_customer_orders(text) to anon, authenticated;
+revoke all on function public.get_customer_profile() from public;
+revoke all on function public.save_customer_cart(jsonb) from public;
+revoke all on function public.load_customer_cart() from public;
+revoke all on function public.create_customer_order(jsonb) from public;
+revoke all on function public.list_customer_orders() from public;
+grant execute on function public.create_customer(jsonb) to authenticated;
+grant execute on function public.get_customer_profile() to authenticated;
+grant execute on function public.save_customer_cart(jsonb) to authenticated;
+grant execute on function public.load_customer_cart() to authenticated;
+grant execute on function public.create_customer_order(jsonb) to authenticated;
+grant execute on function public.list_customer_orders() to authenticated;
