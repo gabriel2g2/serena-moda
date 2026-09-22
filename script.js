@@ -205,17 +205,13 @@ function normalizeVariants(variants, color, sizes) {
     sizes: Array.isArray(variant.sizes) && variant.sizes.length ? variant.sizes : sizes,
     availableSizes: Array.isArray(variant.availableSizes) && variant.availableSizes.length ? variant.availableSizes : (Array.isArray(variant.sizes) ? variant.sizes : sizes),
     stock: variant.stock === undefined || variant.stock === "" ? undefined : Math.max(0, Number(variant.stock) || 0),
-    stockBySize: variant.stockBySize && typeof variant.stockBySize === "object" ? variant.stockBySize : {},
-    sizeType: variant.sizeType || (sizes.some((size) => /^\d+$/.test(size)) ? "number" : "letter")
+    stockBySize: variant.stockBySize && typeof variant.stockBySize === "object" ? variant.stockBySize : {}
   }));
 }
 
 function renderVariantEditor(containerId, variants = []) {
   const container = document.getElementById(containerId);
   container.replaceChildren();
-  const sizeType = document.getElementById(containerId === "adminVariants" ? "adminSizeType" : "newSizeType");
-  const firstVariant = variants[0] || {};
-  sizeType.value = firstVariant.sizeType || ((firstVariant.sizes || []).some((size) => /^\d+$/.test(size)) ? "number" : "letter");
   const rows = variants.length ? variants : [{}];
   rows.forEach((variant) => {
     const row = document.createElement("div");
@@ -235,7 +231,6 @@ function renderVariantEditor(containerId, variants = []) {
 }
 
 function readVariantEditor(containerId, fallbackColor, fallbackSizes) {
-  const sizeType = document.getElementById(containerId === "adminVariants" ? "adminSizeType" : "newSizeType").value;
   return [...document.getElementById(containerId).children].map((row) => {
     const model = row.querySelector('[data-variant="model"]').value.trim();
     const color = row.querySelector('[data-variant="color"]').value.trim() || fallbackColor;
@@ -250,8 +245,7 @@ function readVariantEditor(containerId, fallbackColor, fallbackSizes) {
     return {
       model, color, sizes,
       availableSizes: sizes.filter((size) => stockBySize[size] > 0),
-      stockBySize, stockInvalid: stockInvalid || sizes.some((size) => sizeType === "number" ? !/^\d+$/.test(size) : /^\d+$/.test(size)),
-      sizeType,
+      stockBySize, stockInvalid,
       stock: Object.values(stockBySize).reduce((total, value) => total + value, 0)
     };
   }).filter((variant) => variant.model || variant.color || variant.sizes.length);
