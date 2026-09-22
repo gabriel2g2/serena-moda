@@ -17,6 +17,17 @@ alter table public.products add column if not exists color text not null default
 alter table public.products add column if not exists sizes text[] not null default '{}';
 alter table public.products add column if not exists variants jsonb not null default '[]'::jsonb;
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.products'::regclass and conname = 'products_variants_array_check'
+  ) then
+    alter table public.products add constraint products_variants_array_check
+      check (jsonb_typeof(variants) = 'array');
+  end if;
+end $$;
+
 alter table public.products enable row level security;
 
 create or replace function public.is_admin()

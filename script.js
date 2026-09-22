@@ -193,6 +193,64 @@ function openProduct(card) {
   document.body.classList.add("modal-open");
 }
 
+function parseSizes(value) {
+  return value.split(",").map((size) => size.trim()).filter(Boolean);
+}
+
+function normalizeVariants(variants, color, sizes) {
+  if (!Array.isArray(variants) || !variants.length) return [];
+  return variants.map((variant) => ({
+    model: String(variant.model || "").trim(),
+    color: String(variant.color || color || "").trim(),
+    sizes: Array.isArray(variant.sizes) && variant.sizes.length ? variant.sizes : sizes,
+    availableSizes: Array.isArray(variant.availableSizes) && variant.availableSizes.length ? variant.availableSizes : (Array.isArray(variant.sizes) ? variant.sizes : sizes),
+    stock: variant.stock === undefined || variant.stock === "" ? undefined : Math.max(0, Number(variant.stock) || 0),
+    stockBySize: variant.stockBySize && typeof variant.stockBySize === "object" ? variant.stockBySize : {}
+  }));
+}
+
+function renderVariantEditor(containerId, variants = []) {
+  const container = document.getElementById(containerId);
+  container.replaceChildren();
+  const rows = variants.length ? variants : [{}];
+  rows.forEach((variant) => {
+    const row = document.createElement("div");
+    row.className = "admin-variant-row";
+    row.innerHTML = '<label>Modelo<input data-variant="model" placeholder="Ex.: Clássico"></label><label>Cor<input data-variant="color" placeholder="Ex.: Preto"></label><label>Tamanhos e estoque<input data-variant="stock" placeholder="P:2, M:5, G:0"></label><button class="admin-remove-variant" type="button" aria-label="Remover variação"><i class="bi bi-trash"></i></button>';
+    row.querySelector('[data-variant="model"]').value = variant.model || "";
+    row.querySelector('[data-variant="color"]').value = variant.color || "";
+    const stockBySize = variant.stockBySize || {};
+    row.querySelector('[data-variant="stock"]').value = Object.keys(stockBySize).length
+      ? Object.entries(stockBySize).map(([size, stock]) => `${size}:${stock}`).join(", ")
+      : (Array.isArray(variant.sizes) ? variant.sizes.map((size) => `${size}:${variant.stock ?? 0}`).join(", ") : "");
+    row.querySelector(".admin-remove-variant").addEventListener("click", () => {
+      if (container.children.length > 1) row.remove();
+    });
+    container.appendChild(row);
+  });
+}
+
+function readVariantEditor(containerId, fallbackColor, fallbackSizes) {
+  return [...document.getElementById(containerId).children].map((row) => {
+    const model = row.querySelector('[data-variant="model"]').value.trim();
+    const color = row.querySelector('[data-variant="color"]').value.trim() || fallbackColor;
+    const stockBySize = {};
+    let stockInvalid = false;
+    parseSizes(row.querySelector('[data-variant="stock"]').value).forEach((entry) => {
+      const [size, rawStock] = entry.split(":").map((part) => part.trim());
+      if (size && /^\d+$/.test(rawStock || "")) stockBySize[size] = Number(rawStock);
+      else if (entry) stockInvalid = true;
+    });
+    const sizes = Object.keys(stockBySize).length ? Object.keys(stockBySize) : fallbackSizes;
+    return {
+      model, color, sizes,
+      availableSizes: sizes.filter((size) => stockBySize[size] > 0),
+      stockBySize, stockInvalid,
+      stock: Object.values(stockBySize).reduce((total, value) => total + value, 0)
+    };
+  }).filter((variant) => variant.model || variant.color || variant.sizes.length);
+}
+
 function renderProductOptions() {
   const options = document.getElementById("productOptions");
   const addButton = document.getElementById("addToCartButton");
@@ -202,7 +260,8 @@ function renderProductOptions() {
   const colors = [...new Set(variants.map((variant) => variant.color).filter(Boolean))];
   const sizes = [...new Set((selectedVariant?.sizes || selectedProduct?.sizes || []).filter(Boolean))];
   const availableSizes = selectedVariant?.availableSizes || sizes;
-  const isVariantAvailable = (variant) => variant.available !== false && (variant.stock === undefined || variant.stock > 0);
+  const isVariantAvailable = (variant) => variant.available !== false && (variant.stock === undefined || variant.stock > 0) &&
+    (!selectedVariant?.selectedSize || !variant.stockBySize || Number(variant.stockBySize[selectedVariant.selectedSize] ?? 0) > 0);
   const addOption = (label, values, property, unavailableValues = []) => {
     if (!values.length) return;
     const fieldset = document.createElement("fieldset");
@@ -226,6 +285,7 @@ function renderProductOptions() {
           selectedVariant.selectedSize = value;
           renderProductOptions();
         }
+
       });
       fieldset.appendChild(button);
     });
@@ -233,7 +293,8 @@ function renderProductOptions() {
   };
   addOption("Modelo", models, "model", models.filter((model) => !variants.some((variant) => variant.model === model && isVariantAvailable(variant))));
   addOption("Cor", colors, "color", colors.filter((color) => !variants.some((variant) => variant.color === color && isVariantAvailable(variant))));
-  addOption("Tamanho", sizes, "size", sizes.filter((size) => !availableSizes.includes(size)));
+  addOption("Tamanho", sizes, "size", sizes.filter((size) => !availableSizes.includes(size) ||
+    (selectedVariant?.stockBySize && Number(selectedVariant.stockBySize[size] ?? 0) <= 0)));
   const valid = isVariantAvailable(selectedVariant) && (!sizes.length || Boolean(selectedVariant?.selectedSize));
   addButton.disabled = !valid;
   document.getElementById("productSelectionMessage").textContent = valid ? "" : "Selecione um tamanho disponível para continuar.";
@@ -615,10 +676,12 @@ function populateAdminProduct() {
   imagePreview.src = product.image_url || "";
   imagePreview.hidden = !product.image_url;
   document.getElementById("adminProductName").value = product.name || "";
+  document.getElementById("adminProductCategory").value = product.category || "outras";
   document.getElementById("adminPrice").value = product.price ?? "";
   document.getElementById("adminProductDescription").value = product.description || "";
   document.getElementById("adminProductColor").value = product.color || "";
   document.getElementById("adminProductSizes").value = Array.isArray(product.sizes) ? product.sizes.join(", ") : "";
+  renderVariantEditor("adminVariants", normalizeVariants(product.variants, product.color, product.sizes || []));
 }
 document.getElementById("adminButton").addEventListener("click", openAdmin);
 document.querySelectorAll("[data-close-admin]").forEach((element) => element.addEventListener("click", closeAdmin));
@@ -634,8 +697,15 @@ document.getElementById("adminLoginForm").addEventListener("submit", async (even
   updateAdminProducts();
 });
 adminProduct.addEventListener("change", () => {
-  const option = adminProduct.selectedOptions[0];
   populateAdminProduct();
+});
+document.getElementById("addAdminVariant").addEventListener("click", () => {
+  const current = readVariantEditor("adminVariants", document.getElementById("adminProductColor").value.trim(), parseSizes(document.getElementById("adminProductSizes").value));
+  renderVariantEditor("adminVariants", [...current, {}]);
+});
+document.getElementById("addNewVariant").addEventListener("click", () => {
+  const current = readVariantEditor("newVariants", document.getElementById("newProductColor").value.trim(), parseSizes(document.getElementById("newProductSizes").value));
+  renderVariantEditor("newVariants", [...current, {}]);
 });
 document.getElementById("adminProductImage").addEventListener("change", (event) => {
   const file = event.target.files[0];
@@ -652,9 +722,12 @@ document.getElementById("priceForm").addEventListener("submit", async (event) =>
   const id = adminProduct.value;
   const price = Number(document.getElementById("adminPrice").value);
   const product = products.find((item) => item.id === id);
-  const sizes = document.getElementById("adminProductSizes").value.split(",").map((size) => size.trim()).filter(Boolean);
+  const sizes = parseSizes(document.getElementById("adminProductSizes").value);
   if (!id || !product || Number.isNaN(price) || price < 0) { showMessage("adminMessage", "Selecione um produto e informe um preço válido."); return; }
-  const updates = { name: document.getElementById("adminProductName").value.trim(), description: document.getElementById("adminProductDescription").value.trim(), color: document.getElementById("adminProductColor").value.trim(), sizes, price };
+  const variants = readVariantEditor("adminVariants", document.getElementById("adminProductColor").value.trim(), sizes);
+  if (variants.some((variant) => variant.stockInvalid || Object.values(variant.stockBySize).some((stock) => !Number.isInteger(stock) || stock < 0))) { showMessage("adminMessage", "O estoque deve usar números inteiros iguais ou maiores que zero."); return; }
+  const variantsToSave = variants.map(({ stockInvalid, ...variant }) => variant);
+  const updates = { name: document.getElementById("adminProductName").value.trim(), category: document.getElementById("adminProductCategory").value, description: document.getElementById("adminProductDescription").value.trim(), color: document.getElementById("adminProductColor").value.trim(), sizes, variants: variantsToSave, price };
   if (!updates.name) { showMessage("adminMessage", "Informe o nome do produto."); return; }
   const imageFile = document.getElementById("adminProductImage").files[0];
   if (imageFile) {
@@ -700,13 +773,16 @@ document.getElementById("newProductForm").addEventListener("submit", async (even
   const file = document.getElementById("newProductImage").files[0];
   const priceValue = document.getElementById("newProductPrice").value;
   const price = priceValue ? Number(priceValue) : null;
-  const sizes = document.getElementById("newProductSizes").value.split(",").map((size) => size.trim()).filter(Boolean);
-  if (!name || !file) { showMessage("newProductMessage", "Informe o nome e escolha uma imagem."); return; }
+  const sizes = parseSizes(document.getElementById("newProductSizes").value);
+  const variants = readVariantEditor("newVariants", document.getElementById("newProductColor").value.trim(), sizes);
+  if (!name || !file || price === null || Number.isNaN(price) || price < 0) { showMessage("newProductMessage", "Informe nome, imagem e um preço válido."); return; }
+  if (variants.some((variant) => variant.stockInvalid || Object.values(variant.stockBySize).some((stock) => !Number.isInteger(stock) || stock < 0))) { showMessage("newProductMessage", "O estoque deve usar números inteiros iguais ou maiores que zero."); return; }
+  const variantsToSave = variants.map(({ stockInvalid, ...variant }) => variant);
   const filePath = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
   const upload = await supabaseClient.storage.from("products").upload(filePath, file, { upsert: false, contentType: file.type });
   if (upload.error) { showMessage("newProductMessage", "Não foi possível enviar a imagem."); return; }
   const { data: publicUrl } = supabaseClient.storage.from("products").getPublicUrl(filePath);
-  const insert = await supabaseClient.from("products").insert({ name, category, image_url: publicUrl.publicUrl, price, description: document.getElementById("newProductDescription").value.trim(), color: document.getElementById("newProductColor").value.trim(), sizes }).select().single();
+  const insert = await supabaseClient.from("products").insert({ name, category, image_url: publicUrl.publicUrl, price, description: document.getElementById("newProductDescription").value.trim(), color: document.getElementById("newProductColor").value.trim(), sizes, variants: variantsToSave }).select().single();
   if (insert.error) { showMessage("newProductMessage", "Imagem enviada, mas não foi possível salvar o produto."); return; }
   addProductCard(insert.data);
   products.push(insert.data);
@@ -714,6 +790,7 @@ document.getElementById("newProductForm").addEventListener("submit", async (even
   showMessage("newProductMessage", "Produto salvo no Supabase.");
   event.target.reset();
   document.getElementById("newProductPreview").hidden = true;
+  renderVariantEditor("newVariants");
 });
 document.getElementById("deleteProductButton").addEventListener("click", async () => {
   const id = adminProduct.value;
@@ -735,6 +812,7 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); closeSearch(); } });
 renderCart();
 updateCustomerHeader();
+renderVariantEditor("newVariants");
 loadProducts().then(() => loadCustomerCart());
 if (supabaseClient) {
   supabaseClient.auth.onAuthStateChange(async (_event, session) => {
