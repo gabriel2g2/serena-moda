@@ -7,6 +7,7 @@ create table if not exists public.products (
   description text not null default '',
   color text not null default '',
   sizes text[] not null default '{}',
+  variants jsonb not null default '[]'::jsonb,
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -14,6 +15,7 @@ create table if not exists public.products (
 alter table public.products add column if not exists description text not null default '';
 alter table public.products add column if not exists color text not null default '';
 alter table public.products add column if not exists sizes text[] not null default '{}';
+alter table public.products add column if not exists variants jsonb not null default '[]'::jsonb;
 
 alter table public.products enable row level security;
 
@@ -111,7 +113,8 @@ where not exists (
 update public.products set
   description = 'Cropped estruturado com modelagem confortável e acabamento delicado para compor looks modernos.',
   color = 'Terracota',
-  sizes = array['P', 'M', 'G']
+  sizes = array['P', 'M', 'G'],
+  variants = '[{"model":"Corset clássico","color":"Terracota","sizes":["P","M","G"],"availableSizes":["P","M","G"]},{"model":"Corset alongado","color":"Terracota","sizes":["P","M","G"],"availableSizes":["P","G"]}]'::jsonb
 where name = 'Cropped Corset';
 
 update public.products set
@@ -186,6 +189,32 @@ update public.products set
   sizes = array['P', 'M', 'G', 'GG']
 where name = 'Jaqueta Couro';
 
+update public.products
+set price = case name
+  when 'Cropped Corset' then 89.90
+  when 'Regata Contrast' then 59.90
+  when 'Cropped Rosa' then 69.90
+  when 'Cropped Regata' then 54.90
+  when 'Camiseta Gráfica' then 79.90
+  when 'Regata Básica' then 49.90
+  when 'Short Jeans' then 99.90
+  when 'Short Alfaiataria' then 109.90
+  when 'Short Couro' then 119.90
+  when 'Vestido Marinho' then 159.90
+  when 'Macacão Alfaiataria' then 189.90
+  when 'Body Textura' then 89.90
+  when 'Jaqueta Couro' then 219.90
+  else price
+end,
+variants = case name
+  when 'Cropped Corset' then '[{"model":"Corset clássico","color":"Terracota","sizes":["P","M","G"],"availableSizes":["P","M","G"],"stock":10},{"model":"Corset alongado","color":"Terracota","sizes":["P","M","G"],"availableSizes":["P","G"],"stock":5}]'::jsonb
+  else jsonb_build_array(jsonb_build_object('model','Modelo único','color',color,'sizes',to_jsonb(sizes),'availableSizes',to_jsonb(sizes),'stock',10))
+end
+where name in ('Cropped Corset', 'Regata Contrast', 'Cropped Rosa', 'Cropped Regata',
+  'Camiseta Gráfica', 'Regata Básica', 'Short Jeans', 'Short Alfaiataria',
+  'Short Couro', 'Vestido Marinho', 'Macacão Alfaiataria', 'Body Textura',
+  'Jaqueta Couro');
+
 create table if not exists public.customers (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid unique references auth.users(id) on delete cascade,
@@ -211,6 +240,8 @@ create table if not exists public.cart_items (
   customer_id uuid not null references public.customers(id) on delete cascade,
   product_id uuid not null references public.products(id),
   quantity integer not null check (quantity > 0),
+  variant jsonb not null default '{}'::jsonb,
+  variant_key text not null default '',
   updated_at timestamptz not null default now(),
   primary key (customer_id, product_id)
 );
@@ -232,9 +263,15 @@ create table if not exists public.order_items (
   product_id uuid references public.products(id),
   product_name text not null,
   unit_price numeric(10,2) not null check (unit_price >= 0),
-  quantity integer not null check (quantity > 0)
+  quantity integer not null check (quantity > 0),
+  variant jsonb not null default '{}'::jsonb
 );
 
+alter table public.cart_items add column if not exists variant jsonb not null default '{}'::jsonb;
+alter table public.cart_items add column if not exists variant_key text not null default '';
+alter table public.order_items add column if not exists variant jsonb not null default '{}'::jsonb;
+alter table public.cart_items drop constraint if exists cart_items_pkey;
+alter table public.cart_items add constraint cart_items_pkey primary key (customer_id, product_id, variant_key);
 alter table public.customers enable row level security;
 alter table public.cart_items enable row level security;
 alter table public.orders enable row level security;
@@ -342,8 +379,13 @@ begin
   delete from public.cart_items where customer_id = customer_record.id;
   for item in select * from jsonb_array_elements(coalesce(cart_data, '[]'::jsonb)) loop
     if (item->>'quantity')::integer > 0 then
-      insert into public.cart_items(customer_id, product_id, quantity)
-      values (customer_record.id, (item->>'id')::uuid, (item->>'quantity')::integer);
+      insert into public.cart_items(customer_id, product_id, quantity, variant, variant_key)
+      values (
+        customer_record.id, (item->>'id')::uuid, (item->>'quantity')::integer,
+        coalesce(item->'variant', '{}'::jsonb), coalesce(item->>'variantKey', '')
+      )
+      on conflict (customer_id, product_id, variant_key) do update
+      set quantity = excluded.quantity, variant = excluded.variant, variant_key = excluded.variant_key;
     end if;
   end loop;
 end;
@@ -355,7 +397,7 @@ language sql
 security definer
 set search_path = public
 as $$
-  select coalesce(jsonb_agg(jsonb_build_object('id', ci.product_id, 'quantity', ci.quantity)), '[]'::jsonb)
+  select coalesce(jsonb_agg(jsonb_build_object('id', ci.product_id, 'quantity', ci.quantity, 'variant', ci.variant)), '[]'::jsonb)
   from public.cart_items ci
   join public.customers c on c.id = ci.customer_id
   where c.auth_user_id = auth.uid();
@@ -419,10 +461,10 @@ begin
   for item in select * from jsonb_array_elements(order_data->'items') loop
     select * into product_record from public.products
     where id = (item->>'id')::uuid and active = true;
-    insert into public.order_items(order_id, product_id, product_name, unit_price, quantity)
+    insert into public.order_items(order_id, product_id, product_name, unit_price, quantity, variant)
     values (
       new_order.id, product_record.id, product_record.name,
-      product_record.price, (item->>'quantity')::integer
+      product_record.price, (item->>'quantity')::integer, coalesce(item->'variant', '{}'::jsonb)
     );
   end loop;
 
@@ -447,7 +489,8 @@ as $$
   select o.id, o.status, o.subtotal, o.shipping, o.total, o.created_at,
     coalesce(
       (select jsonb_agg(jsonb_build_object(
-        'name', oi.product_name, 'price', oi.unit_price, 'quantity', oi.quantity
+        'name', oi.product_name, 'price', oi.unit_price, 'quantity', oi.quantity,
+        'variant', oi.variant
       ) order by oi.id) from public.order_items oi where oi.order_id = o.id),
       '[]'::jsonb
     ) as items

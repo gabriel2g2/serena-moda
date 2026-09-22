@@ -12,6 +12,7 @@ const searchInput = document.getElementById("productSearchInput");
 const searchResults = document.getElementById("searchResults");
 let cart = [];
 let selectedProduct = null;
+let selectedVariant = null;
 let products = [];
 let customer = JSON.parse(localStorage.getItem("serena-customer") || "null");
 let shippingEstimate = customer?.shipping ?? null;
@@ -132,7 +133,10 @@ async function loadProducts() {
     showMessage("formMessage", "Configuração do Supabase não encontrada.");
     return;
   }
-  const { data, error } = await supabaseClient.from("products").select("id,name,category,image_url,price,description,color,sizes").eq("active", true).order("created_at", { ascending: false });
+  let { data, error } = await supabaseClient.from("products").select("id,name,category,image_url,price,description,color,sizes,variants").eq("active", true).order("created_at", { ascending: false });
+  if (error?.code === "42703") {
+    ({ data, error } = await supabaseClient.from("products").select("id,name,category,image_url,price,description,color,sizes").eq("active", true).order("created_at", { ascending: false }));
+  }
   if (error) {
     console.error("Não foi possível carregar produtos do Supabase:", error);
     showMessage("formMessage", "Não foi possível carregar o catálogo online.");
@@ -156,9 +160,16 @@ function openProduct(card) {
   document.getElementById("modalProductName").textContent = name;
   document.getElementById("modalProductDescription").textContent = product.description || "Uma escolha Serena para deixar seus dias mais bonitos e confortáveis.";
   const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+  const variants = Array.isArray(product.variants) && product.variants.length ? product.variants : [{
+    model: "",
+    color: product.color || "",
+    sizes,
+    availableSizes: sizes
+  }];
+  selectedVariant = variants[0];
   const meta = document.getElementById("modalProductMeta");
   meta.replaceChildren();
-  if (product.color) {
+  if (product.color && variants.length === 1) {
     const color = document.createElement("span");
     const colorLabel = document.createElement("b");
     colorLabel.textContent = "Cor: ";
@@ -166,7 +177,7 @@ function openProduct(card) {
     color.append(document.createTextNode(product.color));
     meta.appendChild(color);
   }
-  if (sizes.length) {
+  if (sizes.length && variants.length === 1) {
     const size = document.createElement("span");
     const sizeLabel = document.createElement("b");
     sizeLabel.textContent = "Tamanhos: ";
@@ -175,10 +186,57 @@ function openProduct(card) {
     meta.appendChild(size);
   }
   document.getElementById("modalProductPrice").textContent = price ? formatPrice(price) : "Preço a definir";
-  selectedProduct = { id: card.dataset.id || image.src, name, category, image: image.src, price, description: product.description || "", color: product.color || "", sizes };
+  selectedProduct = { id: card.dataset.id || image.src, name, category, image: image.src, price, description: product.description || "", color: product.color || "", sizes, variants };
+  renderProductOptions();
   productModal.classList.add("is-open");
   productModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
+}
+
+function renderProductOptions() {
+  const options = document.getElementById("productOptions");
+  const addButton = document.getElementById("addToCartButton");
+  options.replaceChildren();
+  const variants = selectedProduct?.variants || [];
+  const models = [...new Set(variants.map((variant) => variant.model).filter(Boolean))];
+  const colors = [...new Set(variants.map((variant) => variant.color).filter(Boolean))];
+  const sizes = [...new Set((selectedVariant?.sizes || selectedProduct?.sizes || []).filter(Boolean))];
+  const availableSizes = selectedVariant?.availableSizes || sizes;
+  const isVariantAvailable = (variant) => variant.available !== false && (variant.stock === undefined || variant.stock > 0);
+  const addOption = (label, values, property, unavailableValues = []) => {
+    if (!values.length) return;
+    const fieldset = document.createElement("fieldset");
+    fieldset.className = "product-option-group";
+    const legend = document.createElement("legend");
+    legend.textContent = label;
+    fieldset.appendChild(legend);
+    values.forEach((value) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "product-option";
+      button.textContent = value;
+      button.dataset.option = property;
+      button.disabled = unavailableValues.includes(value);
+      button.classList.toggle("is-selected", selectedVariant?.[property] === value || (property === "size" && selectedVariant?.selectedSize === value));
+      button.addEventListener("click", () => {
+        if (property === "model" || property === "color") {
+          selectedVariant = variants.find((variant) => variant[property] === value) || selectedVariant;
+          renderProductOptions();
+        } else {
+          selectedVariant.selectedSize = value;
+          renderProductOptions();
+        }
+      });
+      fieldset.appendChild(button);
+    });
+    options.appendChild(fieldset);
+  };
+  addOption("Modelo", models, "model", models.filter((model) => !variants.some((variant) => variant.model === model && isVariantAvailable(variant))));
+  addOption("Cor", colors, "color", colors.filter((color) => !variants.some((variant) => variant.color === color && isVariantAvailable(variant))));
+  addOption("Tamanho", sizes, "size", sizes.filter((size) => !availableSizes.includes(size)));
+  const valid = isVariantAvailable(selectedVariant) && (!sizes.length || Boolean(selectedVariant?.selectedSize));
+  addButton.disabled = !valid;
+  document.getElementById("productSelectionMessage").textContent = valid ? "" : "Selecione um tamanho disponível para continuar.";
 }
 
 catalog.addEventListener("click", (event) => {
@@ -216,7 +274,8 @@ function renderCart() {
     const name = document.createElement("strong");
     name.textContent = item.name;
     const category = document.createElement("small");
-    category.textContent = item.category;
+    const choices = [item.model, item.color, item.size].filter(Boolean).join(" · ");
+    category.textContent = choices ? `${item.category} · ${choices}` : item.category;
     const price = document.createElement("span");
     price.textContent = item.price ? formatPrice(item.price) : "Preço a definir";
     const controls = document.createElement("div");
@@ -247,14 +306,19 @@ function renderCart() {
   syncCart();
 }
 async function syncCart() {
-  if (!customer?.code || !supabaseClient) return;
+  if (!customer?.id || !supabaseClient) return;
   const { error } = await supabaseClient.rpc("save_customer_cart", {
-    cart_data: cart.map((item) => ({ id: item.id, quantity: item.quantity }))
+    cart_data: cart.map((item) => ({
+      id: item.id,
+      quantity: item.quantity,
+      variantKey: item.variantKey || "",
+      variant: { model: item.model || "", color: item.color || "", size: item.size || "" }
+    }))
   });
   if (error) console.error("Não foi possível sincronizar a sacola:", error);
 }
 async function loadCustomerCart() {
-  if (!customer?.code || !supabaseClient) return;
+  if (!customer?.id || !supabaseClient) return;
   const { data, error } = await supabaseClient.rpc("load_customer_cart");
   if (error) {
     console.error("Não foi possível carregar a sacola:", error);
@@ -262,7 +326,11 @@ async function loadCustomerCart() {
   }
   cart = (data || []).map((saved) => {
     const product = products.find((item) => item.id === saved.id);
-    return product ? { id: product.id, name: product.name, category: product.category, image: product.image_url, price: Number(product.price) || 0, quantity: saved.quantity } : null;
+    return product ? {
+      id: product.id, name: product.name, category: product.category, image: product.image_url,
+      price: Number(product.price) || 0, quantity: saved.quantity,
+      ...(saved.variant || {}), variantKey: JSON.stringify(saved.variant || {})
+    } : null;
   }).filter(Boolean);
   renderCart();
 }
@@ -277,8 +345,11 @@ function updateCart(id, action) {
 function openCart() { cartDrawer.classList.add("is-open"); cartDrawer.setAttribute("aria-hidden", "false"); document.body.classList.add("modal-open"); }
 function closeCart() { cartDrawer.classList.remove("is-open"); cartDrawer.setAttribute("aria-hidden", "true"); document.body.classList.remove("modal-open"); }
 document.getElementById("addToCartButton").addEventListener("click", () => {
-  const existing = cart.find((item) => item.id === selectedProduct.id);
-  if (existing) existing.quantity += 1; else cart.push({ ...selectedProduct, quantity: 1 });
+  if (!selectedProduct || !selectedVariant || (selectedVariant.sizes?.length && !selectedVariant.selectedSize)) return;
+  const variantKey = JSON.stringify({ model: selectedVariant.model || "", color: selectedVariant.color || "", size: selectedVariant.selectedSize || "" });
+  const item = { ...selectedProduct, ...selectedVariant, size: selectedVariant.selectedSize || "", variantKey, quantity: 1 };
+  const existing = cart.find((cartItem) => cartItem.id === selectedProduct.id && cartItem.variantKey === variantKey);
+  if (existing) existing.quantity += 1; else cart.push(item);
   renderCart(); closeProductModal(); openCart();
 });
 document.getElementById("cartButton").addEventListener("click", openCart);
@@ -312,7 +383,13 @@ async function checkout() {
         address: customer.address, number: customer.number,
         complement: customer.complement, neighborhood: customer.neighborhood
       },
-      items: cart.map((item) => ({ id: item.id, name: item.name, price: item.price, quantity: item.quantity }))
+      items: cart.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        variant: { model: item.model || "", color: item.color || "", size: item.size || "" }
+      }))
     }
   });
   if (error) {
