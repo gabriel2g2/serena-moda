@@ -171,6 +171,7 @@ function openProduct(card) {
     sizes,
     availableSizes: sizes
   }];
+  renderProductGallery(product, variants);
   selectedVariant = variants[0];
   selectedModel = "";
   selectedColor = "";
@@ -184,6 +185,7 @@ function openProduct(card) {
     color.append(document.createTextNode(product.color));
     meta.appendChild(color);
   }
+
   if (sizes.length && variants.length === 1) {
     const size = document.createElement("span");
     const sizeLabel = document.createElement("b");
@@ -200,6 +202,28 @@ function openProduct(card) {
   document.body.classList.add("modal-open");
 }
 
+function renderProductGallery(product, variants) {
+  const gallery = document.getElementById("productGallery");
+  gallery.replaceChildren();
+  const images = [product.image_url, ...variants.map((variant) => variant.image_url)].filter(Boolean).filter((url, index, list) => list.indexOf(url) === index);
+  images.forEach((url, index) => {
+    const thumbnail = document.createElement("button");
+    thumbnail.type = "button";
+    thumbnail.className = `product-gallery-thumb${index === 0 ? " is-selected" : ""}`;
+    thumbnail.setAttribute("aria-label", `Ver foto ${index + 1}`);
+    const image = document.createElement("img");
+    image.src = safeImageUrl(url);
+    image.alt = `${product.name} - foto ${index + 1}`;
+    thumbnail.appendChild(image);
+    thumbnail.addEventListener("click", () => {
+      document.getElementById("modalProductImage").src = image.src;
+      gallery.querySelectorAll(".product-gallery-thumb").forEach((item) => item.classList.remove("is-selected"));
+      thumbnail.classList.add("is-selected");
+    });
+    gallery.appendChild(thumbnail);
+  });
+}
+
 function parseSizes(value) {
   return value.split(",").map((size) => size.trim()).filter(Boolean);
 }
@@ -212,7 +236,8 @@ function normalizeVariants(variants, color, sizes) {
     sizes: Array.isArray(variant.sizes) && variant.sizes.length ? variant.sizes : sizes,
     availableSizes: Array.isArray(variant.availableSizes) && variant.availableSizes.length ? variant.availableSizes : (Array.isArray(variant.sizes) ? variant.sizes : sizes),
     stock: variant.stock === undefined || variant.stock === "" ? undefined : Math.max(0, Number(variant.stock) || 0),
-    stockBySize: variant.stockBySize && typeof variant.stockBySize === "object" ? variant.stockBySize : {}
+    stockBySize: variant.stockBySize && typeof variant.stockBySize === "object" ? variant.stockBySize : {},
+    image_url: String(variant.image_url || "").trim()
   }));
 }
 
@@ -230,13 +255,18 @@ function renderVariantEditor(containerId, variants = []) {
   rows.forEach((variant) => {
     const row = document.createElement("div");
     row.className = "admin-variant-row";
-    row.innerHTML = '<label>Modelo<input data-variant="model" placeholder="Ex.: Clássico"></label><label>Cor<input data-variant="color" placeholder="Ex.: Preto"></label><label>Tamanhos<input data-variant="sizes" placeholder="P, M, G"></label><label>Estoque<input data-variant="stock" placeholder="10, 5, 0" inputmode="numeric"></label><button class="admin-remove-variant" type="button" aria-label="Remover variação"><i class="bi bi-trash"></i></button>';
+    row.innerHTML = '<label>Modelo<input data-variant="model" placeholder="Ex.: Clássico"></label><label>Cor<input data-variant="color" placeholder="Ex.: Azul"></label><label>Foto da variação<input data-variant="image" type="file" accept="image/*"><small class="variant-image-name"></small></label><label>Tamanhos<input data-variant="sizes" placeholder="P, M, G"></label><label>Estoque<input data-variant="stock" placeholder="10, 5, 0" inputmode="numeric"></label><button class="admin-remove-variant" type="button" aria-label="Remover variação"><i class="bi bi-trash"></i></button>';
     row.querySelector('[data-variant="model"]').value = variant.model || "";
     row.querySelector('[data-variant="color"]').value = variant.color || "";
+    row.dataset.imageUrl = variant.image_url || "";
+    row.querySelector(".variant-image-name").textContent = variant.image_url ? "Foto cadastrada. Escolha outra para substituir." : "Nenhuma foto cadastrada.";
     const stockBySize = variantStockEntries(variant);
     const sizes = Object.keys(stockBySize).length ? Object.keys(stockBySize) : (Array.isArray(variant.sizes) ? variant.sizes : []);
     row.querySelector('[data-variant="sizes"]').value = sizes.join(", ");
     row.querySelector('[data-variant="stock"]').value = sizes.map((size) => stockBySize[size] ?? variant.stock ?? 0).join(", ");
+    row.querySelector('[data-variant="image"]').addEventListener("change", (event) => {
+      row.querySelector(".variant-image-name").textContent = event.target.files[0]?.name || (variant.image_url ? "Foto cadastrada." : "Nenhuma foto cadastrada.");
+    });
     row.querySelector(".admin-remove-variant").addEventListener("click", () => {
       if (container.children.length > 1) row.remove();
     });
@@ -263,7 +293,9 @@ function readVariantEditor(containerId, fallbackColor, fallbackSizes) {
       model, color, sizes,
       availableSizes: sizes.filter((size) => stockBySize[size] > 0),
       stockBySize, stockInvalid,
-      stock: Object.values(stockBySize).reduce((total, value) => total + value, 0)
+      stock: Object.values(stockBySize).reduce((total, value) => total + value, 0),
+      image_url: row.dataset.imageUrl || "",
+      imageFile: row.querySelector('[data-variant="image"]').files[0] || null
     };
   }).filter((variant) => variant.model || variant.color || variant.sizes.length);
 }
@@ -774,7 +806,8 @@ document.getElementById("priceForm").addEventListener("submit", async (event) =>
   if (!id || !product || Number.isNaN(price) || price < 0) { showMessage("adminMessage", "Selecione um produto e informe um preço válido."); return; }
   const variants = readVariantEditor("adminVariants", product.color || "", product.sizes || []);
   if (variants.some((variant) => variant.stockInvalid || Object.values(variant.stockBySize).some((stock) => !Number.isInteger(stock) || stock < 0))) { showMessage("adminMessage", "O estoque deve usar números inteiros iguais ou maiores que zero."); return; }
-  const variantsToSave = variants.map(({ stockInvalid, ...variant }) => variant);
+  if (!await prepareVariantImages(variants, "adminMessage")) return;
+  const variantsToSave = variants.map(({ stockInvalid, imageFile, ...variant }) => variant);
   const productFields = variantProductFields(variantsToSave);
   const updates = { name: document.getElementById("adminProductName").value.trim(), category: document.getElementById("adminProductCategory").value, description: document.getElementById("adminProductDescription").value.trim(), color: productFields.color, sizes: productFields.sizes, variants: variantsToSave, price };
   if (!updates.name) { showMessage("adminMessage", "Informe o nome do produto."); return; }
@@ -829,7 +862,8 @@ document.getElementById("newProductForm").addEventListener("submit", async (even
   const variants = readVariantEditor("newVariants", "", []);
   if (!name || !file || price === null || Number.isNaN(price) || price < 0) { showMessage("newProductMessage", "Informe nome, imagem e um preço válido."); return; }
   if (variants.some((variant) => variant.stockInvalid || Object.values(variant.stockBySize).some((stock) => !Number.isInteger(stock) || stock < 0))) { showMessage("newProductMessage", "O estoque deve usar números inteiros iguais ou maiores que zero."); return; }
-  const variantsToSave = variants.map(({ stockInvalid, ...variant }) => variant);
+  if (!await prepareVariantImages(variants, "newProductMessage")) return;
+  const variantsToSave = variants.map(({ stockInvalid, imageFile, ...variant }) => variant);
   const filePath = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
   const upload = await supabaseClient.storage.from("products").upload(filePath, file, { upsert: false, contentType: file.type });
   if (upload.error) { showMessage("newProductMessage", "Não foi possível enviar a imagem."); return; }
@@ -884,4 +918,25 @@ if (supabaseClient) {
       updateAdminProducts();
     }
   });
+}
+
+async function prepareVariantImages(variants, messageId) {
+  for (const variant of variants) {
+    if (!variant.imageFile) {
+      delete variant.imageFile;
+      delete variant.stockInvalid;
+      continue;
+    }
+    const filePath = `products/${crypto.randomUUID()}-${variant.imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+    const upload = await supabaseClient.storage.from("products").upload(filePath, variant.imageFile, { upsert: false, contentType: variant.imageFile.type });
+    if (upload.error) {
+      console.error("Não foi possível enviar a foto da variação:", upload.error);
+      showMessage(messageId, "Não foi possível enviar uma das fotos das variações.");
+      return false;
+    }
+    variant.image_url = supabaseClient.storage.from("products").getPublicUrl(filePath).data.publicUrl;
+    delete variant.imageFile;
+    delete variant.stockInvalid;
+  }
+  return true;
 }
