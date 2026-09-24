@@ -202,6 +202,26 @@ function openProduct(card) {
   document.body.classList.add("modal-open");
 }
 
+function updateSelectedVariantDisplay() {
+  if (!selectedProduct || !selectedVariant) return;
+  const modalImage = document.getElementById("modalProductImage");
+  const variantImage = safeImageUrl(selectedVariant.image_url);
+  if (variantImage) modalImage.src = variantImage;
+  const meta = document.getElementById("modalProductMeta");
+  meta.replaceChildren();
+  const details = [
+    ["Modelo", selectedVariant.model],
+    ["Cor", selectedVariant.color || selectedProduct.color]
+  ].filter(([, value]) => value);
+  details.forEach(([label, value]) => {
+    const detail = document.createElement("span");
+    const detailLabel = document.createElement("b");
+    detailLabel.textContent = `${label}: `;
+    detail.append(detailLabel, document.createTextNode(value));
+    meta.appendChild(detail);
+  });
+}
+
 function renderProductGallery(product, variants) {
   const gallery = document.getElementById("productGallery");
   gallery.replaceChildren();
@@ -325,6 +345,7 @@ function renderProductOptions() {
     (!selectedVariant?.selectedSize || hasStockForSize(variant, selectedVariant.selectedSize))
   ) || selectedVariant || variants[0];
   selectedVariant = activeVariant;
+  updateSelectedVariantDisplay();
   const sizes = [...new Set(variants.flatMap((variant) => variant.sizes || []).filter(Boolean))];
   const availableSizes = sizes.filter((size) => variants.some((variant) => isVariantAvailable(variant) && hasStockForSize(variant, size)));
   const addOption = (label, values, property, unavailableValues = []) => {
