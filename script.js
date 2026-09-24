@@ -103,12 +103,22 @@ function filterCatalog(selected) {
 }
 
 function safeImageUrl(value) {
+  if (!value || value === "undefined" || value === "null") return "";
   try {
     const url = new URL(value, window.location.href);
     return ["https:", "http:", "file:"].includes(url.protocol) ? url.href : "";
   } catch {
     return "";
   }
+}
+
+function productImageUrl(product) {
+  const directImage = safeImageUrl(product?.image_url || product?.image);
+  if (directImage) return directImage;
+  const variantImage = Array.isArray(product?.variants)
+    ? product.variants.map((variant) => safeImageUrl(variant?.image_url)).find(Boolean)
+    : "";
+  return variantImage;
 }
 
 function addProductCard(product) {
@@ -118,8 +128,12 @@ function addProductCard(product) {
   card.dataset.category = product.category;
   card.dataset.price = product.price ?? "";
   const image = document.createElement("img");
-  image.src = safeImageUrl(product.image_url || product.image);
+  image.src = productImageUrl(product);
   image.alt = product.name;
+  image.addEventListener("error", () => {
+    const fallback = productImageUrl({ ...product, image_url: "" });
+    if (fallback && image.src !== fallback) image.src = fallback;
+  });
   const info = document.createElement("div");
   info.className = "product-info";
   const category = document.createElement("span");
@@ -159,8 +173,14 @@ function openProduct(card) {
   const price = Number(card.dataset.price) || 0;
   const name = card.querySelector("h3").textContent;
   const category = card.querySelector("span").textContent;
-  document.getElementById("modalProductImage").src = image.src;
-  document.getElementById("modalProductImage").alt = image.alt;
+  const initialImage = productImageUrl(product) || safeImageUrl(image.getAttribute("src"));
+  const modalImage = document.getElementById("modalProductImage");
+  modalImage.src = initialImage;
+  modalImage.alt = image.alt;
+  modalImage.onerror = () => {
+    const fallback = [...document.querySelectorAll("#productGallery img")].find((item) => item.complete && item.naturalWidth > 0);
+    if (fallback && modalImage.src !== fallback.src) modalImage.src = fallback.src;
+  };
   document.getElementById("modalProductCategory").textContent = category;
   document.getElementById("modalProductName").textContent = name;
   document.getElementById("modalProductDescription").textContent = product.description || "Uma escolha Serena para deixar seus dias mais bonitos e confortáveis.";
@@ -195,7 +215,7 @@ function openProduct(card) {
     meta.appendChild(size);
   }
   document.getElementById("modalProductPrice").textContent = price ? formatPrice(price) : "Preço a definir";
-  selectedProduct = { id: card.dataset.id || image.src, name, category, image: image.src, price, description: product.description || "", color: product.color || "", sizes, variants };
+  selectedProduct = { id: card.dataset.id || initialImage, name, category, image: initialImage, price, description: product.description || "", color: product.color || "", sizes, variants };
   renderProductOptions();
   productModal.classList.add("is-open");
   productModal.setAttribute("aria-hidden", "false");
