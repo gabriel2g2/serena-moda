@@ -4,6 +4,8 @@ const productModal = document.getElementById("productModal");
 const cartDrawer = document.getElementById("cartDrawer");
 const cartItems = document.getElementById("cartItems");
 const cartTotal = document.getElementById("cartTotal");
+const cartShippingZip = document.getElementById("cartShippingZip");
+const cartShippingResult = document.getElementById("cartShippingResult");
 const adminModal = document.getElementById("adminModal");
 const customerModal = document.getElementById("customerModal");
 const searchModal = document.getElementById("searchModal");
@@ -572,10 +574,49 @@ function renderCart() {
     row.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => updateCart(item.id, button.dataset.action)));
     cartItems.appendChild(row);
   });
-  const pendingPrice = cart.some((item) => !item.price);
-  cartTotal.textContent = pendingPrice ? "Preço a definir" : formatPrice(cart.reduce((sum, item) => sum + item.price * item.quantity, 0));
   document.querySelector(".bag-count").textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
+  calculateCartShipping(true);
   syncCart();
+}
+function updateCartTotals() {
+  const pendingPrice = cart.some((item) => !item.price);
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  cartTotal.textContent = pendingPrice ? "Preço a definir" : formatPrice(subtotal);
+  const shippingRow = document.getElementById("cartShippingRow");
+  const grandRow = document.getElementById("cartGrandRow");
+  const showTotals = !pendingPrice && cart.length && shippingEstimate !== null;
+  shippingRow.hidden = !showTotals;
+  grandRow.hidden = !showTotals;
+  if (showTotals) {
+    document.getElementById("cartShippingValue").textContent = shippingEstimate === 0 ? "Grátis" : formatPrice(shippingEstimate);
+    document.getElementById("cartGrandTotal").textContent = formatPrice(subtotal + shippingEstimate);
+  }
+}
+function calculateCartShipping(auto) {
+  const zip = cleanZip(cartShippingZip.value);
+  if (zip.length !== 8) {
+    shippingEstimate = null;
+    cartShippingResult.textContent = auto ? "" : "Informe um CEP válido para calcular.";
+    updateCartTotals();
+    return;
+  }
+  if (!cart.length || cart.some((item) => !item.price)) {
+    shippingEstimate = null;
+    cartShippingResult.textContent = cart.length ? "Cadastre os preços dos produtos para calcular o frete." : "";
+    updateCartTotals();
+    return;
+  }
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const rate = subtotal >= 199 ? 0 : shippingByRegion(zip);
+  if (rate === null) {
+    shippingEstimate = null;
+    cartShippingResult.textContent = "Não foi possível estimar o frete para este CEP.";
+    updateCartTotals();
+    return;
+  }
+  shippingEstimate = rate;
+  cartShippingResult.textContent = rate === 0 ? "Frete grátis para este pedido." : `Frete estimado: ${formatPrice(rate)}.`;
+  updateCartTotals();
 }
 async function syncCart() {
   if (!customer?.id || !supabaseClient) return;
@@ -614,7 +655,11 @@ function updateCart(id, action) {
   if (action === "remove" || item.quantity < 1) cart = cart.filter((product) => product.id !== id);
   renderCart();
 }
-function openCart() { cartDrawer.classList.add("is-open"); cartDrawer.setAttribute("aria-hidden", "false"); document.body.classList.add("modal-open"); }
+function openCart() {
+  if (customer?.zip && !cartShippingZip.value) cartShippingZip.value = formatZip(customer.zip);
+  calculateCartShipping(true);
+  cartDrawer.classList.add("is-open"); cartDrawer.setAttribute("aria-hidden", "false"); document.body.classList.add("modal-open");
+}
 function closeCart() { cartDrawer.classList.remove("is-open"); cartDrawer.setAttribute("aria-hidden", "true"); document.body.classList.remove("modal-open"); }
 document.getElementById("addToCartButton").addEventListener("click", () => {
   if (!selectedProduct || !selectedVariant || (selectedVariant.sizes?.length && !selectedVariant.selectedSize)) return;
@@ -640,9 +685,8 @@ async function checkout() {
   }
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   if (shippingEstimate === null) {
-    closeCart();
-    openCustomerModal();
-    document.getElementById("customerMessage").textContent = "Calcule o frete antes de finalizar o pedido.";
+    cartShippingResult.textContent = "Calcule o frete antes de finalizar o pedido.";
+    cartShippingZip.focus();
     return;
   }
   const { error } = await supabaseClient.rpc("create_customer_order", {
@@ -778,17 +822,10 @@ customerZip.addEventListener("input", () => {
   customerZip.value = formatZip(customerZip.value);
   if (cleanZip(customerZip.value).length === 8) lookupZipCode();
 });
-document.getElementById("calculateShippingButton").addEventListener("click", () => {
-  const zip = cleanZip(customerZip.value);
-  const result = document.getElementById("shippingResult");
-  if (zip.length !== 8) { result.textContent = "Informe um CEP válido para calcular."; return; }
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  if (cart.length && cart.some((item) => !item.price)) { result.textContent = "Cadastre os preços dos produtos para calcular o frete."; return; }
-  const rate = subtotal >= 199 ? 0 : shippingByRegion(zip);
-  if (rate === null) { result.textContent = "Não foi possível estimar o frete para este CEP."; return; }
-  shippingEstimate = rate;
-  result.textContent = rate === 0 ? "Frete grátis para este pedido." : `Frete estimado: ${formatPrice(rate)}. Prazo e valor finais serão confirmados no checkout.`;
+cartShippingZip.addEventListener("input", () => {
+  cartShippingZip.value = formatZip(cartShippingZip.value);
 });
+document.getElementById("cartShippingButton").addEventListener("click", () => calculateCartShipping(false));
 document.getElementById("customerForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(event.target);

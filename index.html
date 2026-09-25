@@ -134,7 +134,18 @@
         <div class="cart-panel">
           <div class="cart-header"><h2 id="cartTitle">Sua sacola</h2><button class="modal-close" type="button" aria-label="Fechar sacola" data-close-cart><i class="bi bi-x-lg"></i></button></div>
           <div class="cart-items" id="cartItems"><p class="cart-empty">Sua sacola está vazia.</p></div>
-          <div class="cart-footer"><div class="cart-total"><span>Subtotal</span><strong id="cartTotal">Preço a definir</strong></div><button class="btn btn-serena w-100" type="button" id="checkoutButton">Finalizar pedido</button><small class="cart-note">Os valores serão atualizados quando os preços forem cadastrados.</small></div>
+          <div class="cart-footer">
+            <div class="shipping-box cart-shipping-box">
+              <label>CEP<input id="cartShippingZip" inputmode="numeric" maxlength="9" placeholder="00000-000"></label>
+              <button class="customer-history-button" id="cartShippingButton" type="button">Calcular frete</button>
+              <p class="shipping-result" id="cartShippingResult" role="status"></p>
+            </div>
+            <div class="cart-total"><span>Subtotal</span><strong id="cartTotal">Preço a definir</strong></div>
+            <div class="cart-total" id="cartShippingRow" hidden><span>Frete</span><strong id="cartShippingValue"></strong></div>
+            <div class="cart-total cart-total-final" id="cartGrandRow" hidden><span>Total</span><strong id="cartGrandTotal"></strong></div>
+            <button class="btn btn-serena w-100" type="button" id="checkoutButton">Finalizar pedido</button>
+            <small class="cart-note">Os valores serão atualizados quando os preços forem cadastrados.</small>
+          </div>
         </div>
       </aside>
 
@@ -202,11 +213,6 @@
             <label>Número<input id="customerNumber" name="number" inputmode="numeric" autocomplete="address-line2" placeholder="Ex.: 123" required></label>
             <label>Complemento<input id="customerComplement" name="complement" autocomplete="address-line3" placeholder="Opcional"></label>
             <label>Bairro<input id="customerNeighborhood" name="neighborhood" required></label>
-          </div>
-          <div class="shipping-box">
-            <div><strong>Calcule seu frete</strong><small>Estimativa para entrega saindo de São Paulo</small></div>
-            <button class="customer-history-button" id="calculateShippingButton" type="button">Calcular frete</button>
-            <p class="shipping-result" id="shippingResult" role="status"></p>
           </div>
           <button class="btn btn-serena w-100" type="submit">Continuar</button>
             <p class="customer-message" id="customerMessage" role="status"></p>
