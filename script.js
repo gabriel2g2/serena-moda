@@ -5,7 +5,6 @@ const cartDrawer = document.getElementById("cartDrawer");
 const cartItems = document.getElementById("cartItems");
 const cartTotal = document.getElementById("cartTotal");
 const adminModal = document.getElementById("adminModal");
-const adminProduct = document.getElementById("adminProduct");
 const customerModal = document.getElementById("customerModal");
 const searchModal = document.getElementById("searchModal");
 const searchInput = document.getElementById("productSearchInput");
@@ -264,10 +263,6 @@ function renderProductGallery(product, variants) {
   });
 }
 
-function parseSizes(value) {
-  return value.split(",").map((size) => size.trim()).filter(Boolean);
-}
-
 function normalizeVariants(variants, color, sizes) {
   if (!Array.isArray(variants) || !variants.length) return [];
   return variants.map((variant) => ({
@@ -284,55 +279,153 @@ function normalizeVariants(variants, color, sizes) {
 function variantStockEntries(variant) {
   const storedStock = variant.stockBySize && typeof variant.stockBySize === "object" ? variant.stockBySize : {};
   if (Object.keys(storedStock).length) return storedStock;
-  const legacyEntries = (Array.isArray(variant.sizes) ? variant.sizes : []).map((entry) => String(entry).split(":"));
-  return Object.fromEntries(legacyEntries.filter(([size, stock]) => size && /^\d+$/.test(stock || "")).map(([size, stock]) => [size.trim(), Number(stock)]));
+  const rawSizes = Array.isArray(variant.sizes) ? variant.sizes : [];
+  const legacyEntries = rawSizes.map((entry) => String(entry).split(":"));
+  const perSizeStock = Object.fromEntries(legacyEntries.filter(([size, stock]) => size && /^\d+$/.test(stock || "")).map(([size, stock]) => [size.trim(), Number(stock)]));
+  if (Object.keys(perSizeStock).length) return perSizeStock;
+  // Cadastros antigos guardam apenas um total de estoque para todos os tamanhos: repete o valor em cada tamanho.
+  if (rawSizes.length && variant.stock !== undefined) {
+    return Object.fromEntries(rawSizes.map((size) => [String(size).trim(), Math.max(0, Number(variant.stock) || 0)]));
+  }
+  return {};
+}
+
+function getRowSizeStock(row) {
+  try {
+    const parsed = JSON.parse(row.dataset.sizeStock || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function setRowSizeStock(row, list) {
+  row.dataset.sizeStock = JSON.stringify(list);
+}
+
+function renderSizeStockChips(row) {
+  const list = getRowSizeStock(row);
+  const container = row.querySelector('[data-variant="sizeStockList"]');
+  container.replaceChildren();
+  if (!list.length) {
+    const empty = document.createElement("p");
+    empty.className = "admin-size-empty";
+    empty.textContent = "Nenhum tamanho adicionado ainda.";
+    container.appendChild(empty);
+    return;
+  }
+  list.forEach((entry, index) => {
+    const chip = document.createElement("div");
+    chip.className = "admin-size-chip";
+    const label = document.createElement("span");
+    label.textContent = entry.size;
+    const stockInput = document.createElement("input");
+    stockInput.type = "number";
+    stockInput.min = "0";
+    stockInput.step = "1";
+    stockInput.value = entry.stock;
+    stockInput.setAttribute("aria-label", `Estoque para o tamanho ${entry.size}`);
+    stockInput.addEventListener("input", () => {
+      const updated = getRowSizeStock(row);
+      updated[index].stock = Math.max(0, Math.round(Number(stockInput.value) || 0));
+      setRowSizeStock(row, updated);
+    });
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "admin-size-remove";
+    removeButton.setAttribute("aria-label", `Remover tamanho ${entry.size}`);
+    removeButton.innerHTML = '<i class="bi bi-x-lg"></i>';
+    removeButton.addEventListener("click", () => {
+      setRowSizeStock(row, getRowSizeStock(row).filter((_, itemIndex) => itemIndex !== index));
+      renderSizeStockChips(row);
+    });
+    chip.append(label, stockInput, removeButton);
+    container.appendChild(chip);
+  });
+}
+
+function addSizeToRow(row) {
+  const sizeInput = row.querySelector('[data-variant="newSize"]');
+  const stockInput = row.querySelector('[data-variant="newStock"]');
+  const size = sizeInput.value.trim();
+  if (!size) { sizeInput.focus(); return; }
+  const stock = Math.max(0, Math.round(Number(stockInput.value) || 0));
+  const list = getRowSizeStock(row);
+  const existingIndex = list.findIndex((entry) => entry.size.toLowerCase() === size.toLowerCase());
+  if (existingIndex >= 0) list[existingIndex].stock = stock;
+  else list.push({ size, stock });
+  setRowSizeStock(row, list);
+  renderSizeStockChips(row);
+  sizeInput.value = "";
+  stockInput.value = "";
+  sizeInput.focus();
+}
+
+function createVariantRow(variant = {}) {
+  const row = document.createElement("div");
+  row.className = "admin-variant-row";
+  row.innerHTML = `
+    <div class="admin-variant-row-header">
+      <span class="admin-variant-row-title">Modelo ou cor</span>
+      <button class="admin-remove-variant" type="button" aria-label="Remover este modelo/cor"><i class="bi bi-trash"></i></button>
+    </div>
+    <div class="admin-form-grid">
+      <label>Modelo<input data-variant="model" placeholder="Ex.: Clássico"></label>
+      <label>Cor<input data-variant="color" placeholder="Ex.: Azul"></label>
+    </div>
+    <label>Foto deste modelo/cor<input data-variant="image" type="file" accept="image/*"></label>
+    <img class="admin-variant-photo-preview" alt="Pré-visualização da foto do modelo" hidden>
+    <label class="admin-size-stock-label">Tamanhos e estoque</label>
+    <div class="admin-size-stock-list" data-variant="sizeStockList"></div>
+    <div class="admin-size-stock-add">
+      <input data-variant="newSize" placeholder="Tamanho (P, M, 38...)">
+      <input data-variant="newStock" type="number" min="0" step="1" placeholder="Estoque">
+      <button class="admin-size-add-button" type="button">Adicionar</button>
+    </div>`;
+  row.querySelector('[data-variant="model"]').value = variant.model || "";
+  row.querySelector('[data-variant="color"]').value = variant.color || "";
+  row.dataset.imageUrl = variant.image_url || "";
+  const preview = row.querySelector(".admin-variant-photo-preview");
+  if (variant.image_url) { preview.src = variant.image_url; preview.hidden = false; }
+  const stockBySize = variantStockEntries(variant);
+  setRowSizeStock(row, Object.entries(stockBySize).map(([size, stock]) => ({ size, stock })));
+  renderSizeStockChips(row);
+  row.querySelector('[data-variant="image"]').addEventListener("change", (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+  });
+  row.querySelector(".admin-size-add-button").addEventListener("click", () => addSizeToRow(row));
+  row.querySelectorAll('[data-variant="newSize"], [data-variant="newStock"]').forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); addSizeToRow(row); }
+    });
+  });
+  row.querySelector(".admin-remove-variant").addEventListener("click", () => {
+    if (row.parentElement.children.length > 1) row.remove();
+  });
+  return row;
 }
 
 function renderVariantEditor(containerId, variants = []) {
   const container = document.getElementById(containerId);
   container.replaceChildren();
   const rows = variants.length ? variants : [{}];
-  rows.forEach((variant) => {
-    const row = document.createElement("div");
-    row.className = "admin-variant-row";
-    row.innerHTML = '<label>Modelo<input data-variant="model" placeholder="Ex.: Clássico"></label><label>Cor<input data-variant="color" placeholder="Ex.: Azul"></label><label>Foto da variação<input data-variant="image" type="file" accept="image/*"><small class="variant-image-name"></small></label><label>Tamanhos<input data-variant="sizes" placeholder="P, M, G"></label><label>Estoque<input data-variant="stock" placeholder="10, 5, 0" inputmode="numeric"></label><button class="admin-remove-variant" type="button" aria-label="Remover variação"><i class="bi bi-trash"></i></button>';
-    row.querySelector('[data-variant="model"]').value = variant.model || "";
-    row.querySelector('[data-variant="color"]').value = variant.color || "";
-    row.dataset.imageUrl = variant.image_url || "";
-    row.querySelector(".variant-image-name").textContent = variant.image_url ? "Foto cadastrada. Escolha outra para substituir." : "Nenhuma foto cadastrada.";
-    const stockBySize = variantStockEntries(variant);
-    const sizes = Object.keys(stockBySize).length ? Object.keys(stockBySize) : (Array.isArray(variant.sizes) ? variant.sizes : []);
-    row.querySelector('[data-variant="sizes"]').value = sizes.join(", ");
-    row.querySelector('[data-variant="stock"]').value = sizes.map((size) => stockBySize[size] ?? variant.stock ?? 0).join(", ");
-    row.querySelector('[data-variant="image"]').addEventListener("change", (event) => {
-      row.querySelector(".variant-image-name").textContent = event.target.files[0]?.name || (variant.image_url ? "Foto cadastrada." : "Nenhuma foto cadastrada.");
-    });
-    row.querySelector(".admin-remove-variant").addEventListener("click", () => {
-      if (container.children.length > 1) row.remove();
-    });
-    container.appendChild(row);
-  });
+  rows.forEach((variant) => container.appendChild(createVariantRow(variant)));
 }
 
-function readVariantEditor(containerId, fallbackColor, fallbackSizes) {
+function readVariantEditor(containerId) {
   return [...document.getElementById(containerId).children].map((row) => {
     const model = row.querySelector('[data-variant="model"]').value.trim();
-    const color = row.querySelector('[data-variant="color"]').value.trim() || fallbackColor;
-    const sizeValues = parseSizes(row.querySelector('[data-variant="sizes"]').value).map((size) => size.split(":")[0].trim());
-    const stockValues = parseSizes(row.querySelector('[data-variant="stock"]').value);
-    const stockBySize = {};
-    let stockInvalid = false;
-    if (sizeValues.length !== stockValues.length) stockInvalid = true;
-    sizeValues.forEach((size, index) => {
-      const rawStock = stockValues[index];
-      if (/^\d+$/.test(rawStock || "")) stockBySize[size] = Number(rawStock);
-      else stockInvalid = true;
-    });
-    const sizes = sizeValues.length ? sizeValues : fallbackSizes;
+    const color = row.querySelector('[data-variant="color"]').value.trim();
+    const sizeStock = getRowSizeStock(row).filter((entry) => entry.size);
+    const stockBySize = Object.fromEntries(sizeStock.map((entry) => [entry.size, Math.max(0, Math.round(Number(entry.stock) || 0))]));
+    const sizes = sizeStock.map((entry) => entry.size);
     return {
       model, color, sizes,
       availableSizes: sizes.filter((size) => stockBySize[size] > 0),
-      stockBySize, stockInvalid,
+      stockBySize,
       stock: Object.values(stockBySize).reduce((total, value) => total + value, 0),
       image_url: row.dataset.imageUrl || "",
       imageFile: row.querySelector('[data-variant="image"]').files[0] || null
@@ -763,42 +856,117 @@ document.getElementById("customerLogout").addEventListener("click", () => {
   closeCustomerModal();
 });
 
-function openAdmin() { adminModal.classList.add("is-open"); adminModal.setAttribute("aria-hidden", "false"); document.body.classList.add("modal-open"); updateAdminProducts(); }
+function openAdmin() { adminModal.classList.add("is-open"); adminModal.setAttribute("aria-hidden", "false"); document.body.classList.add("modal-open"); renderAdminProductList(); }
 function closeAdmin() { adminModal.classList.remove("is-open"); adminModal.setAttribute("aria-hidden", "true"); document.body.classList.remove("modal-open"); }
-function updateAdminProducts() {
-  adminProduct.innerHTML = "";
-  const cards = productCards();
-  cards.forEach((card) => {
-    const option = document.createElement("option");
-    option.value = card.dataset.id;
-    option.textContent = card.querySelector("h3").textContent;
-    option.dataset.price = card.dataset.price;
-    option.dataset.productId = card.dataset.id;
-    adminProduct.appendChild(option);
-  });
+
+let editingProductId = null;
+
+function totalVariantStock(product) {
+  return (Array.isArray(product.variants) ? product.variants : []).reduce((sum, variant) => sum + (Number(variant.stock) || 0), 0);
+}
+
+function renderAdminProductList() {
+  const container = document.getElementById("adminProductList");
+  container.replaceChildren();
   const count = document.getElementById("adminProductCount");
-  if (count) count.textContent = `${cards.length} ${cards.length === 1 ? "produto" : "produtos"}`;
-  const hasProducts = cards.length > 0;
-  adminProduct.disabled = !hasProducts;
-  document.getElementById("adminPrice").disabled = !hasProducts;
-  document.getElementById("deleteProductButton").disabled = !hasProducts;
-  if (hasProducts) populateAdminProduct();
+  if (count) count.textContent = `${products.length} ${products.length === 1 ? "produto" : "produtos"}`;
+  if (!products.length) {
+    const empty = document.createElement("p");
+    empty.className = "admin-empty";
+    empty.textContent = "Nenhum produto cadastrado ainda.";
+    container.appendChild(empty);
+    return;
+  }
+  products.forEach((product) => {
+    const row = document.createElement("div");
+    row.className = "admin-product-row";
+    const image = document.createElement("img");
+    image.src = productImageUrl(product);
+    image.alt = product.name;
+    const info = document.createElement("div");
+    info.className = "admin-product-row-info";
+    const name = document.createElement("strong");
+    name.textContent = product.name;
+    const meta = document.createElement("small");
+    meta.textContent = `${product.category} · ${formatPrice(Number(product.price) || 0)} · Estoque: ${totalVariantStock(product)}`;
+    info.append(name, meta);
+    const actions = document.createElement("div");
+    actions.className = "admin-product-row-actions";
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.className = "admin-icon-button";
+    editButton.setAttribute("aria-label", `Editar ${product.name}`);
+    editButton.innerHTML = '<i class="bi bi-pencil"></i>';
+    editButton.addEventListener("click", () => openProductEditor(product));
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "admin-icon-button admin-icon-danger";
+    deleteButton.setAttribute("aria-label", `Excluir ${product.name}`);
+    deleteButton.innerHTML = '<i class="bi bi-trash3"></i>';
+    deleteButton.addEventListener("click", () => deleteProduct(product.id));
+    actions.append(editButton, deleteButton);
+    row.append(image, info, actions);
+    container.appendChild(row);
+  });
 }
-function populateAdminProduct() {
-  const product = products.find((item) => item.id === adminProduct.value) || products[0];
-  if (!product) return;
-  adminProduct.value = product.id;
-  const imageInput = document.getElementById("adminProductImage");
-  const imagePreview = document.getElementById("adminProductPreview");
+
+function openProductEditor(product) {
+  editingProductId = product ? product.id : null;
+  document.getElementById("adminEditorSection").hidden = false;
+  document.getElementById("adminEditorTitle").textContent = product ? "Editar produto" : "Adicionar produto";
+  document.getElementById("adminEditorSubtitle").textContent = product ? "Atualize os dados desta peça." : "Preencha os dados da nova peça.";
+  document.getElementById("productFormSubmit").innerHTML = product ? '<i class="bi bi-check2 me-2"></i>Salvar alterações' : '<i class="bi bi-plus-lg me-2"></i>Adicionar produto';
+  const deleteButton = document.getElementById("deleteProductButton");
+  deleteButton.hidden = !product;
+  const imageInput = document.getElementById("productFormImage");
   imageInput.value = "";
-  imagePreview.src = product.image_url || "";
-  imagePreview.hidden = !product.image_url;
-  document.getElementById("adminProductName").value = product.name || "";
-  document.getElementById("adminProductCategory").value = product.category || "outras";
-  document.getElementById("adminPrice").value = product.price ?? "";
-  document.getElementById("adminProductDescription").value = product.description || "";
-  renderVariantEditor("adminVariants", normalizeVariants(product.variants, product.color, product.sizes || []));
+  imageInput.required = !product;
+  document.getElementById("productFormImageHelp").textContent = product ? "Envie uma nova foto apenas se quiser substituir a atual." : "Obrigatória para novos produtos.";
+  const preview = document.getElementById("productFormPreview");
+  preview.src = product?.image_url || "";
+  preview.hidden = !product?.image_url;
+  document.getElementById("productFormName").value = product?.name || "";
+  document.getElementById("productFormCategory").value = product?.category || "outras";
+  document.getElementById("productFormDescription").value = product?.description || "";
+  document.getElementById("productFormPrice").value = product?.price ?? "";
+  renderVariantEditor("productFormVariants", normalizeVariants(product?.variants, product?.color, product?.sizes || []));
+  showMessage("productFormMessage", "");
+  document.getElementById("adminEditorSection").scrollIntoView({ behavior: "smooth", block: "start" });
 }
+
+function closeProductEditor() {
+  editingProductId = null;
+  document.getElementById("adminEditorSection").hidden = true;
+  document.getElementById("productForm").reset();
+  document.getElementById("productFormPreview").hidden = true;
+}
+
+async function uploadProductImage(file, messageId) {
+  const filePath = `products/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+  const upload = await supabaseClient.storage.from("products").upload(filePath, file, { upsert: false, contentType: file.type });
+  if (upload.error) {
+    console.error("Não foi possível enviar a foto:", upload.error);
+    showMessage(messageId, "Não foi possível enviar a foto.");
+    return null;
+  }
+  return supabaseClient.storage.from("products").getPublicUrl(filePath).data.publicUrl;
+}
+
+function refreshCatalogCard(product) {
+  const card = document.querySelector(`.product-card[data-id="${CSS.escape(product.id)}"]`);
+  if (card) {
+    card.dataset.category = product.category;
+    card.dataset.price = product.price ?? "";
+    card.querySelector("h3").textContent = product.name;
+    card.querySelector("span").textContent = product.category;
+    const cardImage = card.querySelector("img");
+    cardImage.src = productImageUrl(product);
+    cardImage.alt = product.name;
+  } else {
+    addProductCard(product);
+  }
+}
+
 document.getElementById("adminButton").addEventListener("click", openAdmin);
 document.querySelectorAll("[data-close-admin]").forEach((element) => element.addEventListener("click", closeAdmin));
 document.getElementById("adminLoginForm").addEventListener("submit", async (event) => {
@@ -816,119 +984,81 @@ document.getElementById("adminLoginForm").addEventListener("submit", async (even
   }
   document.getElementById("loginView").hidden = true;
   document.getElementById("adminView").hidden = false;
-  updateAdminProducts();
+  renderAdminProductList();
 });
-adminProduct.addEventListener("change", () => {
-  populateAdminProduct();
+document.getElementById("showNewProductForm").addEventListener("click", () => openProductEditor(null));
+document.getElementById("cancelEditorButton").addEventListener("click", () => closeProductEditor());
+document.getElementById("addProductVariant").addEventListener("click", () => {
+  document.getElementById("productFormVariants").appendChild(createVariantRow());
 });
-document.getElementById("addAdminVariant").addEventListener("click", () => {
-  const current = readVariantEditor("adminVariants", "", []);
-  renderVariantEditor("adminVariants", [...current, {}]);
-});
-document.getElementById("addNewVariant").addEventListener("click", () => {
-  const current = readVariantEditor("newVariants", "", []);
-  renderVariantEditor("newVariants", [...current, {}]);
-});
-document.getElementById("adminProductImage").addEventListener("change", (event) => {
+document.getElementById("productFormImage").addEventListener("change", (event) => {
   const file = event.target.files[0];
-  const preview = document.getElementById("adminProductPreview");
+  const preview = document.getElementById("productFormPreview");
   if (!file) {
-    populateAdminProduct();
+    if (!editingProductId) preview.hidden = true;
     return;
   }
   preview.src = URL.createObjectURL(file);
   preview.hidden = false;
 });
-document.getElementById("priceForm").addEventListener("submit", async (event) => {
+document.getElementById("productForm").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const id = adminProduct.value;
-  const price = Number(document.getElementById("adminPrice").value);
+  const messageId = "productFormMessage";
+  const isEdit = Boolean(editingProductId);
+  const name = document.getElementById("productFormName").value.trim();
+  const category = document.getElementById("productFormCategory").value;
+  const description = document.getElementById("productFormDescription").value.trim();
+  const priceValue = document.getElementById("productFormPrice").value;
+  const price = priceValue ? Number(priceValue) : NaN;
+  const file = document.getElementById("productFormImage").files[0];
+  if (!name) { showMessage(messageId, "Informe o nome do produto."); return; }
+  if (Number.isNaN(price) || price < 0) { showMessage(messageId, "Informe um preço válido."); return; }
+  if (!isEdit && !file) { showMessage(messageId, "Escolha uma foto principal para o novo produto."); return; }
+  const variants = readVariantEditor("productFormVariants");
+  if (!variants.length) { showMessage(messageId, "Adicione ao menos um modelo/cor com tamanho e estoque."); return; }
+  showMessage(messageId, isEdit ? "Salvando alterações..." : "Cadastrando produto...");
+  if (!await prepareVariantImages(variants, messageId)) return;
+  const variantsToSave = variants.map(({ imageFile, ...variant }) => variant);
+  const productFields = variantProductFields(variantsToSave);
+  const payload = { name, category, description, price, color: productFields.color, sizes: productFields.sizes, variants: variantsToSave };
+  if (file) {
+    const uploadedUrl = await uploadProductImage(file, messageId);
+    if (!uploadedUrl) return;
+    payload.image_url = uploadedUrl;
+  }
+  const result = isEdit
+    ? await supabaseClient.from("products").update(payload).eq("id", editingProductId).select().single()
+    : await supabaseClient.from("products").insert(payload).select().single();
+  if (result.error) {
+    console.error("Não foi possível salvar o produto:", result.error);
+    showMessage(messageId, result.error.code === "PGRST116" ? "Sessão sem permissão administrativa. Saia e entre novamente com a conta administradora." : "Não foi possível salvar o produto.");
+    return;
+  }
+  const saved = result.data;
+  if (isEdit) {
+    const index = products.findIndex((item) => item.id === editingProductId);
+    if (index >= 0) products[index] = saved;
+  } else {
+    products.push(saved);
+  }
+  refreshCatalogCard(saved);
+  renderAdminProductList();
+  showMessage(messageId, isEdit ? "Alterações salvas no Supabase." : "Produto cadastrado com sucesso.");
+  if (isEdit) openProductEditor(saved); else closeProductEditor();
+});
+async function deleteProduct(id) {
   const product = products.find((item) => item.id === id);
-  if (!id || !product || Number.isNaN(price) || price < 0) { showMessage("adminMessage", "Selecione um produto e informe um preço válido."); return; }
-  const variants = readVariantEditor("adminVariants", product.color || "", product.sizes || []);
-  if (variants.some((variant) => variant.stockInvalid || Object.values(variant.stockBySize).some((stock) => !Number.isInteger(stock) || stock < 0))) { showMessage("adminMessage", "O estoque deve usar números inteiros iguais ou maiores que zero."); return; }
-  if (!await prepareVariantImages(variants, "adminMessage")) return;
-  const variantsToSave = variants.map(({ stockInvalid, imageFile, ...variant }) => variant);
-  const productFields = variantProductFields(variantsToSave);
-  const updates = { name: document.getElementById("adminProductName").value.trim(), category: document.getElementById("adminProductCategory").value, description: document.getElementById("adminProductDescription").value.trim(), color: productFields.color, sizes: productFields.sizes, variants: variantsToSave, price };
-  if (!updates.name) { showMessage("adminMessage", "Informe o nome do produto."); return; }
-  const imageFile = document.getElementById("adminProductImage").files[0];
-  if (imageFile) {
-    showMessage("adminMessage", "Enviando nova foto...");
-    const filePath = `products/${crypto.randomUUID()}-${imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
-    const upload = await supabaseClient.storage.from("products").upload(filePath, imageFile, { upsert: false, contentType: imageFile.type });
-    if (upload.error) {
-      console.error("Não foi possível enviar a nova foto:", upload.error);
-      showMessage("adminMessage", "Não foi possível enviar a nova foto.");
-      return;
-    }
-    const { data: publicUrl } = supabaseClient.storage.from("products").getPublicUrl(filePath);
-    updates.image_url = publicUrl.publicUrl;
-  }
-  const { data: updated, error } = await supabaseClient.from("products").update(updates).eq("id", id).select().single();
-  if (error) {
-    console.error("Não foi possível salvar o produto:", error);
-    showMessage("adminMessage", error.code === "PGRST116" ? "Sessão sem permissão administrativa. Saia e entre novamente com a conta administradora." : "Não foi possível salvar as alterações.");
-    return;
-  }
-  const card = document.querySelector(`.product-card[data-id="${CSS.escape(id)}"]`);
-  if (card) {
-    card.dataset.price = price;
-    card.querySelector("h3").textContent = updated.name;
-    card.querySelector("img").src = updated.image_url;
-    card.querySelector("img").alt = updated.name;
-  }
-  Object.assign(product, updated);
-  adminProduct.selectedOptions[0].textContent = updated.name;
-  adminProduct.selectedOptions[0].dataset.price = price;
-  document.getElementById("adminProductImage").value = "";
-  document.getElementById("adminProductPreview").src = updated.image_url;
-  document.getElementById("adminProductPreview").hidden = false;
-  showMessage("adminMessage", "Alterações salvas no Supabase.");
-});
-document.getElementById("newProductImage").addEventListener("change", (event) => {
-  const file = event.target.files[0];
-  const preview = document.getElementById("newProductPreview");
-  if (!file) { preview.hidden = true; return; }
-  preview.src = URL.createObjectURL(file);
-  preview.hidden = false;
-});
-document.getElementById("newProductForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const name = document.getElementById("newProductName").value.trim();
-  const category = document.getElementById("newProductCategory").value;
-  const file = document.getElementById("newProductImage").files[0];
-  const priceValue = document.getElementById("newProductPrice").value;
-  const price = priceValue ? Number(priceValue) : null;
-  const variants = readVariantEditor("newVariants", "", []);
-  if (!name || !file || price === null || Number.isNaN(price) || price < 0) { showMessage("newProductMessage", "Informe nome, imagem e um preço válido."); return; }
-  if (variants.some((variant) => variant.stockInvalid || Object.values(variant.stockBySize).some((stock) => !Number.isInteger(stock) || stock < 0))) { showMessage("newProductMessage", "O estoque deve usar números inteiros iguais ou maiores que zero."); return; }
-  if (!await prepareVariantImages(variants, "newProductMessage")) return;
-  const variantsToSave = variants.map(({ stockInvalid, imageFile, ...variant }) => variant);
-  const filePath = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
-  const upload = await supabaseClient.storage.from("products").upload(filePath, file, { upsert: false, contentType: file.type });
-  if (upload.error) { showMessage("newProductMessage", "Não foi possível enviar a imagem."); return; }
-  const { data: publicUrl } = supabaseClient.storage.from("products").getPublicUrl(filePath);
-  const productFields = variantProductFields(variantsToSave);
-  const insert = await supabaseClient.from("products").insert({ name, category, image_url: publicUrl.publicUrl, price, description: document.getElementById("newProductDescription").value.trim(), color: productFields.color, sizes: productFields.sizes, variants: variantsToSave }).select().single();
-  if (insert.error) { showMessage("newProductMessage", "Imagem enviada, mas não foi possível salvar o produto."); return; }
-  addProductCard(insert.data);
-  products.push(insert.data);
-  updateAdminProducts();
-  showMessage("newProductMessage", "Produto salvo no Supabase.");
-  event.target.reset();
-  document.getElementById("newProductPreview").hidden = true;
-  renderVariantEditor("newVariants");
-});
-document.getElementById("deleteProductButton").addEventListener("click", async () => {
-  const id = adminProduct.value;
-  const name = adminProduct.selectedOptions[0]?.textContent;
-  if (!id || !window.confirm(`Remover "${name}" da vitrine? O produto será ocultado, sem apagar pedidos antigos.`)) return;
+  if (!product) return;
+  if (!window.confirm(`Tem certeza que deseja excluir "${product.name}" da vitrine?\n\nO produto será ocultado da loja, mas pedidos antigos não serão apagados.`)) return;
   const { error } = await supabaseClient.from("products").update({ active: false }).eq("id", id);
-  if (error) { showMessage("adminMessage", "Não foi possível remover o produto da vitrine."); return; }
+  if (error) { console.error("Não foi possível remover o produto:", error); showMessage("productFormMessage", "Não foi possível remover o produto da vitrine."); return; }
   document.querySelector(`.product-card[data-id="${CSS.escape(id)}"]`)?.remove();
-  updateAdminProducts();
-  showMessage("adminMessage", "Produto removido da vitrine.");
+  products = products.filter((item) => item.id !== id);
+  if (editingProductId === id) closeProductEditor();
+  renderAdminProductList();
+}
+document.getElementById("deleteProductButton").addEventListener("click", () => {
+  if (editingProductId) deleteProduct(editingProductId);
 });
 document.getElementById("adminLogout").addEventListener("click", async () => {
   await supabaseClient?.auth.signOut();
@@ -940,7 +1070,6 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); closeSearch(); } });
 renderCart();
 updateCustomerHeader();
-renderVariantEditor("newVariants");
 loadProducts().then(() => loadCustomerCart());
 if (supabaseClient) {
   supabaseClient.auth.onAuthStateChange(async (_event, session) => {
@@ -956,7 +1085,7 @@ if (supabaseClient) {
     if (isAdminUser(data.session?.user)) {
       document.getElementById("loginView").hidden = true;
       document.getElementById("adminView").hidden = false;
-      updateAdminProducts();
+      renderAdminProductList();
     }
   });
 }
@@ -965,7 +1094,6 @@ async function prepareVariantImages(variants, messageId) {
   for (const variant of variants) {
     if (!variant.imageFile) {
       delete variant.imageFile;
-      delete variant.stockInvalid;
       continue;
     }
     const filePath = `products/${crypto.randomUUID()}-${variant.imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
@@ -977,7 +1105,6 @@ async function prepareVariantImages(variants, messageId) {
     }
     variant.image_url = supabaseClient.storage.from("products").getPublicUrl(filePath).data.publicUrl;
     delete variant.imageFile;
-    delete variant.stockInvalid;
   }
   return true;
 }

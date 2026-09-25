@@ -239,14 +239,36 @@
           <small class="admin-warning">Acesso protegido pela autenticação do Supabase.</small>
         </div>
         <div id="adminView" hidden>
-          <div class="admin-heading"><div><p class="eyebrow">Painel Serena</p><h2>Gerenciar loja</h2><p class="admin-help">Atualize o catálogo de forma simples e rápida.</p></div><span class="admin-product-count" id="adminProductCount">0 produtos</span></div>
-          <section class="admin-section" aria-labelledby="priceSectionTitle">
-            <div class="admin-section-heading"><div><h3 id="priceSectionTitle">Produtos cadastrados</h3><p>Altere o preço ou retire uma peça da vitrine.</p></div><i class="bi bi-tags"></i></div>
-            <form id="priceForm" class="admin-form"><label>Produto<select id="adminProduct"></select></label><div class="admin-form-grid"><label>Nome<input id="adminProductName" required></label><label>Categoria<select id="adminProductCategory"><option value="blusas">Blusas</option><option value="shorts">Shorts</option><option value="vestidos">Vestidos</option><option value="outras">Outras</option></select></div><label>Foto principal<input id="adminProductImage" type="file" accept="image/*"><small class="file-help">Use as fotos abaixo para montar o álbum de cada cor ou modelo.</small></label><img id="adminProductPreview" class="new-product-preview" alt="Pré-visualização da foto principal" hidden><label>Descrição<textarea id="adminProductDescription" rows="2" placeholder="Tecido, caimento e detalhes da peça."></textarea></label><label>Preço de venda<input id="adminPrice" type="number" min="0" step="0.01" placeholder="Ex.: 89,90"></label>            <fieldset class="admin-variants"><legend>Variações, fotos e estoque</legend><p class="file-help">Cada linha representa uma cor ou modelo. Escolha uma foto para ela e informe tamanhos e estoque.</p><div id="adminVariants"></div><button class="admin-add-variant" id="addAdminVariant" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar variação</button></fieldset><div class="admin-product-actions"><button class="btn btn-serena" type="submit"><i class="bi bi-check2 me-2"></i>Salvar alterações</button><button class="admin-delete-button" id="deleteProductButton" type="button"><i class="bi bi-trash3 me-2"></i>Excluir da vitrine</button></div><p class="admin-message" id="adminMessage"></p></form>
+          <div class="admin-heading"><div><p class="eyebrow">Painel Serena</p><h2>Gerenciar loja</h2><p class="admin-help">Cadastre, edite ou remova peças do catálogo.</p></div><span class="admin-product-count" id="adminProductCount">0 produtos</span></div>
+          <section class="admin-section" aria-labelledby="productListTitle">
+            <div class="admin-section-heading"><div><h3 id="productListTitle">Produtos cadastrados</h3><p>Clique em editar para atualizar ou em excluir para remover da vitrine.</p></div><button class="admin-add-button" id="showNewProductForm" type="button"><i class="bi bi-plus-lg me-2"></i>Novo produto</button></div>
+            <div class="admin-product-list" id="adminProductList"></div>
           </section>
-          <section class="admin-section admin-new-product" aria-labelledby="newProductTitle">
-            <div class="admin-section-heading"><div><h3 id="newProductTitle">Adicionar produto</h3><p>Inclua uma nova peça com foto, categoria e preço.</p></div><i class="bi bi-plus-circle"></i></div>
-            <form id="newProductForm" class="admin-form"><div class="admin-form-grid"><label>Nome<input id="newProductName" required placeholder="Ex.: Vestido Serena"></label><label>Categoria<select id="newProductCategory"><option value="blusas">Blusas</option><option value="shorts">Shorts</option><option value="vestidos">Vestidos</option><option value="outras">Outras</option></select></label></div><label>Descrição<textarea id="newProductDescription" rows="2" placeholder="Tecido, caimento e detalhes da peça."></textarea></label>            <fieldset class="admin-variants"><legend>Variações, fotos e estoque</legend><p class="file-help">Cada linha representa uma cor ou modelo. Escolha uma foto para ela e informe tamanhos e estoque.</p><div id="newVariants"></div><button class="admin-add-variant" id="addNewVariant" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar variação</button></fieldset><div class="admin-form-grid"><label>Foto principal<input id="newProductImage" type="file" accept="image/*" required><small class="file-help">Obrigatória para novos produtos.</small></label><label>Preço<input id="newProductPrice" type="number" min="0" step="0.01" placeholder="Ex.: 89,90" required></label></div><img id="newProductPreview" class="new-product-preview" alt="Pré-visualização da imagem" hidden><button class="btn btn-serena" type="submit"><i class="bi bi-plus-lg me-2"></i>Adicionar produto</button><p class="admin-message" id="newProductMessage"></p></form>
+          <section class="admin-section admin-editor" id="adminEditorSection" aria-labelledby="adminEditorTitle" hidden>
+            <div class="admin-section-heading"><div><h3 id="adminEditorTitle">Adicionar produto</h3><p id="adminEditorSubtitle">Preencha os dados da nova peça.</p></div><button class="admin-cancel-button" id="cancelEditorButton" type="button">Cancelar</button></div>
+            <form id="productForm" class="admin-form">
+              <div class="admin-form-grid">
+                <label>Nome<input id="productFormName" required placeholder="Ex.: Vestido Serena"></label>
+                <label>Categoria<select id="productFormCategory"><option value="blusas">Blusas</option><option value="shorts">Shorts</option><option value="vestidos">Vestidos</option><option value="outras">Outras</option></select></label>
+              </div>
+              <label>Descrição<textarea id="productFormDescription" rows="2" placeholder="Tecido, caimento e detalhes da peça."></textarea></label>
+              <div class="admin-form-grid">
+                <label>Preço de venda<input id="productFormPrice" type="number" min="0" step="0.01" placeholder="Ex.: 89,90" required></label>
+                <label>Foto principal<input id="productFormImage" type="file" accept="image/*"><small class="file-help" id="productFormImageHelp">Obrigatória para novos produtos.</small></label>
+              </div>
+              <img id="productFormPreview" class="new-product-preview" alt="Pré-visualização da foto principal" hidden>
+              <fieldset class="admin-variants">
+                <legend>Modelos, cores, fotos e estoque</legend>
+                <p class="file-help">Cada linha é um modelo ou cor da peça. Adicione uma foto e informe o tamanho com o estoque disponível — o que ficar sem estoque aparece em cinza na loja.</p>
+                <div id="productFormVariants"></div>
+                <button class="admin-add-variant" id="addProductVariant" type="button"><i class="bi bi-plus-lg me-1"></i>Adicionar modelo ou cor</button>
+              </fieldset>
+              <div class="admin-product-actions">
+                <button class="btn btn-serena" type="submit" id="productFormSubmit"><i class="bi bi-plus-lg me-2"></i>Adicionar produto</button>
+                <button class="admin-delete-button" id="deleteProductButton" type="button" hidden><i class="bi bi-trash3 me-2"></i>Excluir da vitrine</button>
+              </div>
+              <p class="admin-message" id="productFormMessage"></p>
+            </form>
           </section>
           <button class="admin-logout" id="adminLogout" type="button"><i class="bi bi-box-arrow-right me-1"></i>Sair do painel</button>
         </div>
