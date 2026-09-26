@@ -1,4 +1,29 @@
 const supabaseClient = window.serenaSupabase;
+  if (typeof value !== 'number') return 'R$ 0,00';
+  const formatted = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return formatted;
+}
+
+function showMessage(id, text) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = text;
+}
+
+function cleanZip(zip) {
+  return String(zip || '').replace(/\D/g, '').slice(0, 8);
+}
+
+function formatZip(zip) {
+  const cleaned = cleanZip(zip);
+  return cleaned.length >= 8 ? `${cleaned.slice(0,5)}.${cleaned.slice(5,8)}` : zip;
+}
+
+function resetCheckoutMessage(modalElement) {
+  if (modalElement) {
+    const messageEl = modalElement.querySelector('#checkoutMessage');
+    if (messageEl) messageEl.textContent = '';
+  }
+}
 const catalog = document.getElementById("productCatalog");
 const productModal = document.getElementById("productModal");
 const cartDrawer = document.getElementById("cartDrawer");
@@ -145,18 +170,6 @@ function addProductCard(product) {
   action.textContent = "Ver produto";
   info.append(category, name, action);
   card.append(image, info);
-
-  // Botão de checkout no card
-  const buyBtn = document.createElement("button");
-  buyBtn.id = `${product.id}-checkoutButton`;
-  buyBtn.className = "btn btn-outline-secondary w-100 mt-2";
-  buyBtn.textContent = "Comprar agora";
-  buyBtn.style.display = "block";
-  buyBtn.addEventListener("click", () => {
-    performCheckout(selectedProduct, product.id);
-  });
-
-  card.appendChild(buyBtn);
   catalog.appendChild(card);
 }
 
@@ -998,10 +1011,15 @@ async function uploadProductImage(file, messageId) {
     showMessage(messageId, "Não foi possível enviar a foto.");
     return null;
   }
-  return supabaseClient.storage.from("products").getPublicUrl(filePath).data.publicUrl;
+    return supabaseClient.storage.from("products").getPublicUrl(filePath).data.publicUrl;
+  } catch (error) {
+    console.error("Erro ao enviar foto no carrinho:", error);
+    showMessage(messageId, "Erro ao processar a imagem. Tente novamente.");
+    delete variant.imageFile;
+    return true;
+  }
 }
 
-function refreshCatalogCard(product) {
   const card = document.querySelector(`.product-card[data-id="${CSS.escape(product.id)}"]`);
   if (card) {
     card.dataset.category = product.category;
@@ -1011,27 +1029,6 @@ function refreshCatalogCard(product) {
     const cardImage = card.querySelector("img");
     cardImage.src = productImageUrl(product);
     cardImage.alt = product.name;
-
-    // Atualizar botão de checkout existente ou criar novo
-    let buyBtn = card.querySelector("#${product.id}-checkoutButton");
-    if (buyBtn) {
-      buyBtn.textContent = "Comprar agora";
-    } else {
-      const info = card.querySelector(".product-info");
-      const action = card.querySelector("strong");
-      
-      // Adicionar botão de checkout após o texto "Ver produto"
-      const newBuyBtn = document.createElement("button");
-      newBuyBtn.id = `${product.id}-checkoutButton`;
-      newBuyBtn.className = "btn btn-outline-secondary w-100 mt-2";
-      newBuyBtn.textContent = "Comprar agora";
-      newBuyBtn.style.display = "block";
-      newBuyBtn.addEventListener("click", () => {
-        performCheckout(selectedProduct, product.id);
-      });
-      
-      action.insertAdjacentElement("afterend", newBuyBtn);
-    }
   } else {
     addProductCard(product);
   }
@@ -1122,14 +1119,6 @@ async function deleteProduct(id) {
   if (!window.confirm(`Tem certeza que deseja excluir "${product.name}" da vitrine?\n\nO produto será ocultado da loja, mas pedidos antigos não serão apagados.`)) return;
   const { error } = await supabaseClient.from("products").update({ active: false }).eq("id", id);
   if (error) { console.error("Não foi possível remover o produto:", error); showMessage("productFormMessage", "Não foi possível remover o produto da vitrine."); return; }
-  
-  // Remover botões de checkout órfãos antes de remover o card
-  const button = document.querySelector(`.product-card[data-id="${CSS.escape(id)}"] button#${CSS.escape(id)}-checkoutButton`);
-  if (button) {
-    button.remove();
-  }
-  
-  // Remove o card do catálogo após limpar os botões
   document.querySelector(`.product-card[data-id="${CSS.escape(id)}"]`)?.remove();
   products = products.filter((item) => item.id !== id);
   if (editingProductId === id) closeProductEditor();
@@ -1146,68 +1135,6 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
   closeAdmin();
 });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); closeSearch(); } });
-
-function formatZip(value) {
-  const cleaned = String(value || '').replace(/\D/g, '').slice(0, 8);
-  return cleaned.length >= 8 ? `${cleaned.slice(0,5)}.${cleaned.slice(5,8)}` : value;
-}
-
-function resetCheckoutMessage(modalElement) {
-  const messageEl = modalElement?.querySelector('#checkoutMessage');
-  if (messageEl) messageEl.textContent = '';
-}
-
-function buildAddressFromForm() {
-  return {
-    street: document.getElementById('addressStreet')?.value || '',
-    number: document.getElementById('addressNumber')?.value || '',
-    neighborhood: document.getElementById('addressNeighborhood')?.value || '',
-    city: document.getElementById('addressCity')?.value || '',
-    state: document.getElementById('addressState')?.value || ''
-  };
-}
-
-function populateCartItemsInModal(modalElement) {
-  const container = modalElement.querySelector('#cartItems');
-  if (!container || cart.length === 0) {
-    container.innerHTML = '<p class="text-muted">Seu carrinho está vazio.</p>';
-    return false;
-  }
-  
-  let html = '<div id="cartItemsList"></div>';
-  const list = document.getElementById('cartItemsList');
-  if (list) {
-    list.innerHTML = cart.map(item => `
-      <div class="cart-item mb-2 p-2 border rounded bg-light">
-        <div class="d-flex justify-content-between align-items-center">
-          <strong>${item.name}</strong><br>
-          <small>${formatPrice(parseFloat(item.price))} x ${item.quantity}</small>
-        </div>
-      </div>
-    `).join('');
-  }
-  
-  if (customer?.shipping) {
-    const addressBlock = document.createElement('div');
-    addressBlock.className = 'mt-2 p-2 bg-light rounded';
-    addressBlock.innerHTML = `
-      <strong>Endereço de Entrega:</strong><br>
-      <small>Rua: ${customer.shipping.street}</small><br>
-      <small>Nº: ${customer.shipping.number || ''}</small><br>
-      <small>Bairro: ${customer.shipping.neighborhood || ''}</small><br>
-      <small>Cidade/UF: ${customer.shipping.city}, ${customer.shipping.state}</small><br>
-      <small>CEP: ${formatZip(customer.shipping.zip)}</small>
-    `;
-    list.after(addressBlock);
-  }
-  
-  const checkoutBtn = modalElement.querySelector('#checkoutButton');
-  if (checkoutBtn) {
-    checkoutBtn.disabled = cart.length === 0 || !customer?.shipping;
-  }
-  
-  return true;
-}
 renderCart();
 updateCustomerHeader();
 loadProducts().then(() => loadCustomerCart());
@@ -1246,6 +1173,274 @@ async function prepareVariantImages(variants, messageId) {
     variant.image_url = supabaseClient.storage.from("products").getPublicUrl(filePath).data.publicUrl;
     delete variant.imageFile;
   }
+  return formatted;
+}
+
+function showMessageInModal(elementId, text, options = {}, modalElement) {
+  const messageEl = modalElement?.querySelector(`#${elementId}`);
+  if (!messageEl) return;
+  messageEl.innerHTML = "";
+  if (options.textClass) messageEl.classList.add(options.textClass.replace("alert-", ""));
+  else if (!messageEl.classList.contains("alert-success")) messageEl.classList.add("alert-info");
+  messageEl.textContent = text;
+  messageEl.classList.remove("alert-error", "is-invalid");
+}
+
+function resetCheckoutMessage(modalElement) {
+  const messageEl = modalElement?.querySelector("#checkoutMessage");
+  if (messageEl) {
+    messageEl.textContent = "";
+    messageEl.classList.remove("alert-success", "alert-error", "alert-info");
+  }
+}
+
+function buildAddressFromForm() {
+  const street = document.getElementById("checkoutStreet").value.trim();
+  const neighborhood = document.getElementById("checkoutNeighborhood").value.trim();
+  const city = document.getElementById("checkoutCity").value.trim();
+  const state = document.getElementById("checkoutState").value;
+  const zip = document.getElementById("checkoutZip")?.value.replace(/\D/g, "") || "";
+  
+  return { street, neighborhood, city, state, zip };
+}
+
+async function populateCartItemsInModal(variantsData) {
+  const customer = JSON.parse(localStorage.getItem("serena-customer") || "{}");
+  const modalElement = document.getElementById("cartItemsModalContent");
+  
+  if (!modalElement) return;
+  
+  // Renderizar itens do carrinho no modal
+  const itemsContainer = modalElement.querySelector("#cartItemsList");
+  
+  if (!variantsData?.length) {
+    resetCheckoutMessage(modalElement);
+    if (itemsContainer) {
+      itemsContainer.innerHTML = "<p class='text-muted'>Seu carrinho está vazio.</p>";
+      return;
+    }
+  } else {
+    const total = variantsData.reduce((sum, item) => sum + parseFloat(item.price), 0).toFixed(2);
+    
+    if (itemsContainer) {
+      itemsContainer.innerHTML = variantsData.map((item) => `
+        <div class="cart-item mb-3 p-3 border rounded bg-light">
+          <div class="d-flex align-items-center gap-3">
+            <img src="${item.image_url || item.product_image}" 
+                 alt="${item.name}" 
+                 class="rounded-circle" 
+                 style="width: 56px; height: 56px; object-fit: cover;">
+            <div class="flex-grow-1">
+              <h6 class="mb-0">${item.name}</h6>
+              <small class="text-muted d-block">Quantidade: ${item.quantity} - ${formatPrice(parseFloat(item.price))}</small>
+            </div>
+            <span class="fw-bold">${formatPrice(parseFloat(item.price) * item.quantity)}</span>
+          </div>
+        </div>
+      `).join("");
+    }
+    
+  if (typeof value !== 'number') return 'R$ 0,00';
+  const formatted = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return formatted;
+}
+
+function showMessage(id, text) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = text;
+}
+
+function cleanZip(zip) {
+  return String(zip || '').replace(/\D/g, '').slice(0, 8);
+}
+
+function formatZip(zip) {
+  const cleaned = cleanZip(zip);
+  return cleaned.length >= 8 ? `${cleaned.slice(0,5)}.${cleaned.slice(5,8)}` : zip;
+}
+
+function buildAddressFromForm() {
+  return {
+    street: document.getElementById('addressStreet')?.value || '',
+    number: document.getElementById('addressNumber')?.value || '',
+    neighborhood: document.getElementById('addressNeighborhood')?.value || '',
+    city: document.getElementById('addressCity')?.value || '',
+    state: document.getElementById('addressState')?.value || ''
+  };
+}
+
+function populateCartItemsInModal(modalElement) {
+  const container = modalElement.querySelector('#cartItems');
+  const items = cart;
+  
+  if (!container || !items.length) {
+    container.innerHTML = '<p class="text-muted">Seu carrinho está vazio.</p>';
+    return false;
+  }
+  
+  let html = '<div id="cartItemsList"></div>';
+  const list = document.getElementById('cartItemsList');
+  if (list) {
+    list.innerHTML = items.map(item => `
+      <div class="cart-item mb-2 p-2 border rounded bg-light">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <strong>${item.name}</strong><br>
+            <small>${formatPrice(parseFloat(item.price))} x ${item.quantity}</small>
+          </div>
+          <span>${formatPrice(parseFloat(item.price) * item.quantity)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+  
+  // Mostrar endereço se o cliente tiver shipping
+  if (customer?.shipping) {
+    const addressBlock = document.createElement('div');
+    addressBlock.className = 'mt-2 p-2 bg-light rounded';
+    addressBlock.innerHTML = `
+      <strong>Endereço de Entrega:</strong><br>
+      <small>Rua: ${customer.shipping.street}</small><br>
+      <small>Nº: ${customer.shipping.number || ''}</small><br>
+      <small>Bairro: ${customer.shipping.neighborhood || ''}</small><br>
+      <small>Cidade/UF: ${customer.shipping.city}, ${customer.shipping.state}</small><br>
+      <small>CEP: ${formatZip(customer.shipping.zip)}</small>
+    `;
+    list.after(addressBlock);
+  }
+  
+  const total = items.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0);
+  
+  if (modalElement.querySelector('#cartTotal')) {
+    modalElement.querySelector('#cartTotal').textContent = formatPrice(total);
+  }
+  
+  // Habilitar botão checkout se tiver endereço
+  const checkoutBtn = modalElement.querySelector('#checkoutButton');
+  if (checkoutBtn) {
+    checkoutBtn.disabled = !customer?.shipping;
+    if (customer?.shipping) {
+      checkoutBtn.classList.remove('disabled-button');
+    }
+  }
+  
+  return true;
+}
+    // Mostrar mensagem de sucesso ou erro
+    resetCheckoutMessage(modalElement);
+    if (customer?.shipping) {
+      const addressBlock = document.createElement("div");
+      addressBlock.className = "mt-3 p-3 bg-light rounded";
+      addressBlock.innerHTML = `
+        <h6 class="mb-2">Endereço de Entrega:</h6>
+        <p><strong>Rua:</strong> ${customer.shipping?.street || customer.address?.street}</p>
+        <p><strong>Número:</strong> ${customer.shipping?.number || customer.address?.number || "N/A"}</p>
+        <p><strong>Bairro:</strong> ${customer.shipping?.neighborhood || customer.address?.neighborhood || "N/A"}</p>
+        <p><strong>Cidade/UF:</strong> ${customer.shipping?.city} - ${customer.shipping?.state || customer.address?.state || "N/A"}</p>
+        <p><strong>CEP:</strong> ${formatZip(customer.shipping?.zip || customer.address?.zip)}</p>
+      `;
+      if (itemsContainer.nextElementSibling) itemsContainer.after(addressBlock);
+      else itemsContainer.after(document.createElement("br"), addressBlock);
+    }
+    
+    const checkoutButton = modalElement.querySelector("#checkoutButton");
+    if (checkoutButton) {
+      checkoutButton.disabled = false;
+      checkoutButton.classList.remove("disabled-button");
+    }
+  }
+}
+
+function formatPrice(value) {
+  if (typeof value !== 'number') return 'R$ 0,00';
+  const formatted = value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return formatted;
+}
+
+function showMessage(id, text) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = text;
+}
+
+function cleanZip(zip) {
+  return String(zip || '').replace(/\D/g, '').slice(0, 8);
+}
+
+function formatZip(zip) {
+  const cleaned = cleanZip(zip);
+  return cleaned.length >= 8 ? `${cleaned.slice(0,5)}.${cleaned.slice(5,8)}` : zip;
+}
+
+function resetCheckoutMessage(modalElement) {
+  if (modalElement) {
+    const messageEl = modalElement.querySelector('#checkoutMessage');
+    if (messageEl) messageEl.textContent = '';
+  }
+}
+
+function buildAddressFromForm() {
+  return {
+    street: document.getElementById('addressStreet')?.value || '',
+    number: document.getElementById('addressNumber')?.value || '',
+    neighborhood: document.getElementById('addressNeighborhood')?.value || '',
+    city: document.getElementById('addressCity')?.value || '',
+    state: document.getElementById('addressState')?.value || ''
+  };
+}
+
+function populateCartItemsInModal(modalElement) {
+  const container = modalElement.querySelector('#cartItems');
+  const items = cart;
+  
+  if (!container || !items.length) {
+    container.innerHTML = '<p class="text-muted">Seu carrinho está vazio.</p>';
+    return false;
+  }
+  
+  let html = '<div id="cartItemsList"></div>';
+  const list = document.getElementById('cartItemsList');
+  if (list) {
+    list.innerHTML = items.map(item => `
+      <div class="cart-item mb-2 p-2 border rounded bg-light">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <strong>${item.name}</strong><br>
+            <small>${formatPrice(parseFloat(item.price))} x ${item.quantity}</small>
+          </div>
+          <span>${formatPrice(parseFloat(item.price) * item.quantity)}</span>
+        </div>
+      </div>
+    `).join('');
+  }
+  
+  if (customer?.shipping) {
+    const addressBlock = document.createElement('div');
+    addressBlock.className = 'mt-2 p-2 bg-light rounded';
+    addressBlock.innerHTML = `
+      <strong>Endereço de Entrega:</strong><br>
+      <small>Rua: ${customer.shipping.street}</small><br>
+      <small>Nº: ${customer.shipping.number || ''}</small><br>
+      <small>Bairro: ${customer.shipping.neighborhood || ''}</small><br>
+      <small>Cidade/UF: ${customer.shipping.city}, ${customer.shipping.state}</small><br>
+      <small>CEP: ${formatZip(customer.shipping.zip)}</small>
+    `;
+    list.after(addressBlock);
+  }
+  
+  const total = items.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0);
+  
+  if (modalElement.querySelector('#cartTotal')) {
+    modalElement.querySelector('#cartTotal').textContent = formatPrice(total);
+  }
+  
+  const checkoutBtn = modalElement.querySelector('#checkoutButton');
+  if (checkoutBtn) {
+    checkoutBtn.disabled = !customer?.shipping;
+    if (customer?.shipping) {
+      checkoutBtn.classList.remove('disabled-button');
+    }
+  }
+  
   return true;
 }
 
@@ -1301,7 +1496,7 @@ async function performCheckout() {
     }
     
     resetCheckoutMessage(this);
-    showMessage('checkoutMessage', `Pedido realizado com sucesso! Números do pedido: ${order.id} e total: R$ ${(order.total / 100).toFixed(2)}.\nAguardando confirmação.`);
+    showMessage('checkoutMessage', `Pedido realizado com sucesso! Números do pedido: ${order.id} e total: ${formatPrice(order.total)}.\nAguardando confirmação.`);
     
     return true;
   } catch (error) {
@@ -1312,15 +1507,69 @@ async function performCheckout() {
   }
 }
 
-// Configurar botões de checkout nos modais de produto e carrinho
+// Configurar botões de checkout nos modais de produto
 document.addEventListener('DOMContentLoaded', () => {
   const productCheckoutBtns = document.querySelectorAll('[id$="-checkoutButton"]');
+  productCheckoutBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetModal = e.target.closest('.modal') || document.getElementById('productModal');
+      if (!targetModal) return;
+      
+      // Popular carrinho com item selecionado no modal do produto
+      if (selectedProduct && selectedVariant) {
+        cart.push({
+          id: Date.now(),
+          product_id: selectedProduct.id,
+          product_name: selectedProduct.name,
+          name: `${selectedProduct.name} - ${selectedVariant.color || 'Vari padrão'}`,
+          price: parseFloat(selectedVariant.price),
+          quantity: 1,
+          image_url: selectedProduct.image_url || '',
+          color: selectedVariant.color || ''
+        });
+        
+        if (productModal) {
+          productModal.classList.remove('is-open');
+          productModal.setAttribute('aria-hidden', 'true');
+          document.body.classList.remove('modal-open');
+          openCart();
+          populateCartItemsInModal(targetModal);
+        }
+      } else {
+        // Fallback: tentar pegar dados do modal
+        const modalProduct = targetModal.querySelector('.product-details')?.dataset?.product || 
+                             document.querySelector('[data-product]');
+        if (modalProduct) {
+          const prod = JSON.parse(modalProduct.dataset.product || '{}');
+          cart.push({
+            id: Date.now(),
+            product_id: prod.id,
+            product_name: prod.name,
+            name: `${prod.name} - Cor padrão`,
+            price: parseFloat(prod.variants?.[0]?.price || 0),
+            quantity: 1,
+            image_url: prod.image_url || '',
+            color: ''
+          });
+          
+          if (productModal) {
+            productModal.classList.remove('is-open');
+            openCart();
+            populateCartItemsInModal(targetModal);
+          }
+        } else {
+          showMessage('checkoutMessage', 'Selecione um produto e uma cor primeiro.');
+        }
+      }
+    });
+  });
   
-  // Adicionar evento ao modal do carrinho
-  const cartCheckoutBtn = document.querySelector('#cartDrawer .btn-success');
-  if (cartCheckoutBtn) {
+  // Event listener para botão de checkout no modal do carrinho (dentro do drawer)
+  const cartCheckoutBtn = document.querySelector('[id$="-checkoutButton"]');
+  if (cartCheckoutBtn && cartDrawer) {
     cartCheckoutBtn.addEventListener('click', performCheckout);
   }
-  
-  console.log('✅ Serena Shop - Checkout configurado!');
 });
+
+console.log('✅ Serena Shop - Checkout configurado corretamente!');

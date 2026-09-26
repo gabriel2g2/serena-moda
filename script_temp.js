@@ -145,18 +145,6 @@ function addProductCard(product) {
   action.textContent = "Ver produto";
   info.append(category, name, action);
   card.append(image, info);
-
-  // Botão de checkout no card
-  const buyBtn = document.createElement("button");
-  buyBtn.id = `${product.id}-checkoutButton`;
-  buyBtn.className = "btn btn-outline-secondary w-100 mt-2";
-  buyBtn.textContent = "Comprar agora";
-  buyBtn.style.display = "block";
-  buyBtn.addEventListener("click", () => {
-    performCheckout(selectedProduct, product.id);
-  });
-
-  card.appendChild(buyBtn);
   catalog.appendChild(card);
 }
 
@@ -1011,27 +999,6 @@ function refreshCatalogCard(product) {
     const cardImage = card.querySelector("img");
     cardImage.src = productImageUrl(product);
     cardImage.alt = product.name;
-
-    // Atualizar botão de checkout existente ou criar novo
-    let buyBtn = card.querySelector("#${product.id}-checkoutButton");
-    if (buyBtn) {
-      buyBtn.textContent = "Comprar agora";
-    } else {
-      const info = card.querySelector(".product-info");
-      const action = card.querySelector("strong");
-      
-      // Adicionar botão de checkout após o texto "Ver produto"
-      const newBuyBtn = document.createElement("button");
-      newBuyBtn.id = `${product.id}-checkoutButton`;
-      newBuyBtn.className = "btn btn-outline-secondary w-100 mt-2";
-      newBuyBtn.textContent = "Comprar agora";
-      newBuyBtn.style.display = "block";
-      newBuyBtn.addEventListener("click", () => {
-        performCheckout(selectedProduct, product.id);
-      });
-      
-      action.insertAdjacentElement("afterend", newBuyBtn);
-    }
   } else {
     addProductCard(product);
   }
@@ -1122,14 +1089,6 @@ async function deleteProduct(id) {
   if (!window.confirm(`Tem certeza que deseja excluir "${product.name}" da vitrine?\n\nO produto será ocultado da loja, mas pedidos antigos não serão apagados.`)) return;
   const { error } = await supabaseClient.from("products").update({ active: false }).eq("id", id);
   if (error) { console.error("Não foi possível remover o produto:", error); showMessage("productFormMessage", "Não foi possível remover o produto da vitrine."); return; }
-  
-  // Remover botões de checkout órfãos antes de remover o card
-  const button = document.querySelector(`.product-card[data-id="${CSS.escape(id)}"] button#${CSS.escape(id)}-checkoutButton`);
-  if (button) {
-    button.remove();
-  }
-  
-  // Remove o card do catálogo após limpar os botões
   document.querySelector(`.product-card[data-id="${CSS.escape(id)}"]`)?.remove();
   products = products.filter((item) => item.id !== id);
   if (editingProductId === id) closeProductEditor();
@@ -1146,68 +1105,6 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
   closeAdmin();
 });
 document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); closeSearch(); } });
-
-function formatZip(value) {
-  const cleaned = String(value || '').replace(/\D/g, '').slice(0, 8);
-  return cleaned.length >= 8 ? `${cleaned.slice(0,5)}.${cleaned.slice(5,8)}` : value;
-}
-
-function resetCheckoutMessage(modalElement) {
-  const messageEl = modalElement?.querySelector('#checkoutMessage');
-  if (messageEl) messageEl.textContent = '';
-}
-
-function buildAddressFromForm() {
-  return {
-    street: document.getElementById('addressStreet')?.value || '',
-    number: document.getElementById('addressNumber')?.value || '',
-    neighborhood: document.getElementById('addressNeighborhood')?.value || '',
-    city: document.getElementById('addressCity')?.value || '',
-    state: document.getElementById('addressState')?.value || ''
-  };
-}
-
-function populateCartItemsInModal(modalElement) {
-  const container = modalElement.querySelector('#cartItems');
-  if (!container || cart.length === 0) {
-    container.innerHTML = '<p class="text-muted">Seu carrinho está vazio.</p>';
-    return false;
-  }
-  
-  let html = '<div id="cartItemsList"></div>';
-  const list = document.getElementById('cartItemsList');
-  if (list) {
-    list.innerHTML = cart.map(item => `
-      <div class="cart-item mb-2 p-2 border rounded bg-light">
-        <div class="d-flex justify-content-between align-items-center">
-          <strong>${item.name}</strong><br>
-          <small>${formatPrice(parseFloat(item.price))} x ${item.quantity}</small>
-        </div>
-      </div>
-    `).join('');
-  }
-  
-  if (customer?.shipping) {
-    const addressBlock = document.createElement('div');
-    addressBlock.className = 'mt-2 p-2 bg-light rounded';
-    addressBlock.innerHTML = `
-      <strong>Endereço de Entrega:</strong><br>
-      <small>Rua: ${customer.shipping.street}</small><br>
-      <small>Nº: ${customer.shipping.number || ''}</small><br>
-      <small>Bairro: ${customer.shipping.neighborhood || ''}</small><br>
-      <small>Cidade/UF: ${customer.shipping.city}, ${customer.shipping.state}</small><br>
-      <small>CEP: ${formatZip(customer.shipping.zip)}</small>
-    `;
-    list.after(addressBlock);
-  }
-  
-  const checkoutBtn = modalElement.querySelector('#checkoutButton');
-  if (checkoutBtn) {
-    checkoutBtn.disabled = cart.length === 0 || !customer?.shipping;
-  }
-  
-  return true;
-}
 renderCart();
 updateCustomerHeader();
 loadProducts().then(() => loadCustomerCart());
@@ -1248,79 +1145,3 @@ async function prepareVariantImages(variants, messageId) {
   }
   return true;
 }
-
-async function performCheckout() {
-  try {
-    const orderItems = cart.map(item => ({
-      product_id: item.product_id,
-      quantity: item.quantity,
-      price: item.price
-    }));
-    
-    if (!customer?.id || !orderItems.length) {
-      resetCheckoutMessage(this);
-      return showMessage('checkoutMessage', 'Por favor, faça o login ou cadastre-se primeiro.');
-    }
-    
-    const address = buildAddressFromForm();
-    
-    const customerZipEl = document.getElementById('customerZip') || 
-                           document.querySelector('[id$="-zip"]');
-    const shippingZip = customerZipEl?.value || address.city;
-    
-    const orderData = {
-      customer_id: customer.id,
-      items: orderItems,
-      total: cart.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0),
-      status: 'pending',
-      shipping: {
-        street: address.street || '',
-        number: address.number || '',
-        neighborhood: address.neighborhood || '',
-        city: address.city,
-        state: address.state,
-        zip: customerZipEl?.value || null
-      }
-    };
-    
-    const orderResponse = await supabaseClient.rpc('create_order', { order_data: orderData });
-    
-    if (!orderResponse.data) {
-      resetCheckoutMessage(this);
-      return showMessage('checkoutMessage', 'Não foi possível processar seu pedido. Tente novamente.');
-    }
-    
-    const order = orderResponse.data;
-    
-    cart = [];
-    
-    if (customer.id) {
-      const existingOrders = customer.orders || [];
-      customer.orders = [...existingOrders, order];
-      localStorage.setItem('serena-customer', JSON.stringify(customer));
-    }
-    
-    resetCheckoutMessage(this);
-    showMessage('checkoutMessage', `Pedido realizado com sucesso! Números do pedido: ${order.id} e total: R$ ${(order.total / 100).toFixed(2)}.\nAguardando confirmação.`);
-    
-    return true;
-  } catch (error) {
-    console.error('Erro no checkout:', error);
-    resetCheckoutMessage(this);
-    showMessage('checkoutMessage', 'Ocorreu um erro ao processar seu pedido. Por favor, tente novamente mais tarde.');
-    return false;
-  }
-}
-
-// Configurar botões de checkout nos modais de produto e carrinho
-document.addEventListener('DOMContentLoaded', () => {
-  const productCheckoutBtns = document.querySelectorAll('[id$="-checkoutButton"]');
-  
-  // Adicionar evento ao modal do carrinho
-  const cartCheckoutBtn = document.querySelector('#cartDrawer .btn-success');
-  if (cartCheckoutBtn) {
-    cartCheckoutBtn.addEventListener('click', performCheckout);
-  }
-  
-  console.log('✅ Serena Shop - Checkout configurado!');
-});
