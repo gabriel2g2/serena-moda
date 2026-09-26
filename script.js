@@ -6,6 +6,8 @@ const cartItems = document.getElementById("cartItems");
 const cartTotal = document.getElementById("cartTotal");
 const cartShippingZip = document.getElementById("cartShippingZip");
 const cartShippingResult = document.getElementById("cartShippingResult");
+const checkoutModal = document.getElementById("checkoutModal");
+const checkoutForm = document.getElementById("checkoutForm");
 const adminModal = document.getElementById("adminModal");
 const customerModal = document.getElementById("customerModal");
 const searchModal = document.getElementById("searchModal");
@@ -146,17 +148,6 @@ function addProductCard(product) {
   info.append(category, name, action);
   card.append(image, info);
 
-  // Botão de checkout no card
-  const buyBtn = document.createElement("button");
-  buyBtn.id = `${product.id}-checkoutButton`;
-  buyBtn.className = "btn btn-outline-secondary w-100 mt-2";
-  buyBtn.textContent = "Comprar agora";
-  buyBtn.style.display = "block";
-  buyBtn.addEventListener("click", () => {
-    performCheckout(selectedProduct, product.id);
-  });
-
-  card.appendChild(buyBtn);
   catalog.appendChild(card);
 }
 
@@ -701,36 +692,92 @@ async function checkout() {
     cartShippingZip.focus();
     return;
   }
-  const { error } = await supabaseClient.rpc("create_customer_order", {
-    order_data: {
-      subtotal,
-      shipping: shippingEstimate,
-      total: subtotal + shippingEstimate,
-      shipping_address: {
-        zip: customer.zip, state: customer.state, city: customer.city,
-        address: customer.address, number: customer.number,
-        complement: customer.complement, neighborhood: customer.neighborhood
-      },
-      items: cart.map((item) => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        variant: { model: item.model || "", color: item.color || "", size: item.size || "" }
-      }))
-    }
-  });
-  if (error) {
-    console.error("Não foi possível criar o pedido:", error);
-    alert("Não foi possível finalizar o pedido agora. Tente novamente.");
-    return;
-  }
-  cart = [];
-  renderCart();
-  alert("Pedido registrado com sucesso! Entraremos em contato para confirmar o pagamento.");
   closeCart();
+  renderCheckout();
+  checkoutModal.classList.add("is-open");
+  checkoutModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
 }
 document.getElementById("checkoutButton").addEventListener("click", checkout);
+function closeCheckout() {
+  checkoutModal.classList.remove("is-open");
+  checkoutModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+document.querySelectorAll("[data-close-checkout]").forEach((element) => element.addEventListener("click", closeCheckout));
+function renderCheckout() {
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const itemList = document.getElementById("checkoutItems");
+  itemList.replaceChildren();
+  cart.forEach((item) => {
+    const row = document.createElement("li");
+    const name = document.createElement("span");
+    const choices = [item.model, item.color, item.size].filter(Boolean).join(" · ");
+    name.textContent = `${item.quantity} × ${item.name}${choices ? ` (${choices})` : ""}`;
+    const price = document.createElement("strong");
+    price.textContent = formatPrice(item.price * item.quantity);
+    row.append(name, price);
+    itemList.appendChild(row);
+  });
+  document.getElementById("checkoutAddress").textContent = [
+    customer?.address,
+    customer?.number,
+    customer?.complement,
+    customer?.neighborhood,
+    customer?.city,
+    customer?.state,
+    formatZip(customer?.zip || cartShippingZip.value)
+  ].filter(Boolean).join(", ");
+  document.getElementById("checkoutSubtotal").textContent = formatPrice(subtotal);
+  document.getElementById("checkoutShipping").textContent = shippingEstimate === 0 ? "Grátis" : formatPrice(shippingEstimate);
+  document.getElementById("checkoutTotal").textContent = formatPrice(subtotal + shippingEstimate);
+  document.getElementById("checkoutMessage").textContent = "";
+  document.getElementById("confirmOrderButton").disabled = false;
+  document.getElementById("confirmOrderButton").textContent = "Registrar pedido";
+}
+checkoutForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!cart.length || !customer || shippingEstimate === null) return;
+  const paymentMethod = new FormData(checkoutForm).get("checkoutPayment");
+  if (!paymentMethod) {
+    document.getElementById("checkoutMessage").textContent = "Selecione uma forma de pagamento.";
+    return;
+  }
+  const confirmButton = document.getElementById("confirmOrderButton");
+  const message = document.getElementById("checkoutMessage");
+  confirmButton.disabled = true;
+  confirmButton.textContent = "Registrando...";
+  message.textContent = "Enviando seu pedido...";
+  try {
+    const { data, error } = await supabaseClient.rpc("create_customer_order", {
+      order_data: {
+        payment_method: paymentMethod,
+        shipping_address: {
+          zip: cleanZip(cartShippingZip.value), state: customer.state, city: customer.city,
+          address: customer.address, number: customer.number,
+          complement: customer.complement, neighborhood: customer.neighborhood
+        },
+        items: cart.map((item) => ({
+          id: item.id,
+          quantity: item.quantity,
+          variant: { model: item.model || "", color: item.color || "", size: item.size || "" }
+        }))
+      }
+    });
+    if (error) throw error;
+    if (!data?.id) throw new Error("A função de checkout não retornou um identificador de pedido.");
+    cart = [];
+    shippingEstimate = null;
+    renderCart();
+    message.textContent = `Pedido ${data.id} registrado. O pagamento ainda não foi processado; a Serena entrará em contato para combinar a forma selecionada.`;
+    confirmButton.textContent = "Pedido registrado";
+  } catch (error) {
+    console.error("Não foi possível criar o pedido:", error);
+    message.textContent = "Não foi possível registrar o pedido. Confira os dados e tente novamente.";
+    confirmButton.disabled = false;
+    confirmButton.textContent = "Tentar novamente";
+  }
+});
 
 function updateCustomerHeader() {
   const nameDisplay = document.getElementById("customerNameDisplay");
@@ -1012,26 +1059,6 @@ function refreshCatalogCard(product) {
     cardImage.src = productImageUrl(product);
     cardImage.alt = product.name;
 
-    // Atualizar botão de checkout existente ou criar novo
-    let buyBtn = card.querySelector("#${product.id}-checkoutButton");
-    if (buyBtn) {
-      buyBtn.textContent = "Comprar agora";
-    } else {
-      const info = card.querySelector(".product-info");
-      const action = card.querySelector("strong");
-      
-      // Adicionar botão de checkout após o texto "Ver produto"
-      const newBuyBtn = document.createElement("button");
-      newBuyBtn.id = `${product.id}-checkoutButton`;
-      newBuyBtn.className = "btn btn-outline-secondary w-100 mt-2";
-      newBuyBtn.textContent = "Comprar agora";
-      newBuyBtn.style.display = "block";
-      newBuyBtn.addEventListener("click", () => {
-        performCheckout(selectedProduct, product.id);
-      });
-      
-      action.insertAdjacentElement("afterend", newBuyBtn);
-    }
   } else {
     addProductCard(product);
   }
@@ -1122,14 +1149,6 @@ async function deleteProduct(id) {
   if (!window.confirm(`Tem certeza que deseja excluir "${product.name}" da vitrine?\n\nO produto será ocultado da loja, mas pedidos antigos não serão apagados.`)) return;
   const { error } = await supabaseClient.from("products").update({ active: false }).eq("id", id);
   if (error) { console.error("Não foi possível remover o produto:", error); showMessage("productFormMessage", "Não foi possível remover o produto da vitrine."); return; }
-  
-  // Remover botões de checkout órfãos antes de remover o card
-  const button = document.querySelector(`.product-card[data-id="${CSS.escape(id)}"] button#${CSS.escape(id)}-checkoutButton`);
-  if (button) {
-    button.remove();
-  }
-  
-  // Remove o card do catálogo após limpar os botões
   document.querySelector(`.product-card[data-id="${CSS.escape(id)}"]`)?.remove();
   products = products.filter((item) => item.id !== id);
   if (editingProductId === id) closeProductEditor();
@@ -1145,69 +1164,8 @@ document.getElementById("adminLogout").addEventListener("click", async () => {
   document.getElementById("adminLoginForm").reset();
   closeAdmin();
 });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); closeSearch(); } });
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") { closeProductModal(); closeCart(); closeAdmin(); closeCustomerModal(); closeSearch(); closeCheckout(); } });
 
-function formatZip(value) {
-  const cleaned = String(value || '').replace(/\D/g, '').slice(0, 8);
-  return cleaned.length >= 8 ? `${cleaned.slice(0,5)}.${cleaned.slice(5,8)}` : value;
-}
-
-function resetCheckoutMessage(modalElement) {
-  const messageEl = modalElement?.querySelector('#checkoutMessage');
-  if (messageEl) messageEl.textContent = '';
-}
-
-function buildAddressFromForm() {
-  return {
-    street: document.getElementById('addressStreet')?.value || '',
-    number: document.getElementById('addressNumber')?.value || '',
-    neighborhood: document.getElementById('addressNeighborhood')?.value || '',
-    city: document.getElementById('addressCity')?.value || '',
-    state: document.getElementById('addressState')?.value || ''
-  };
-}
-
-function populateCartItemsInModal(modalElement) {
-  const container = modalElement.querySelector('#cartItems');
-  if (!container || cart.length === 0) {
-    container.innerHTML = '<p class="text-muted">Seu carrinho está vazio.</p>';
-    return false;
-  }
-  
-  let html = '<div id="cartItemsList"></div>';
-  const list = document.getElementById('cartItemsList');
-  if (list) {
-    list.innerHTML = cart.map(item => `
-      <div class="cart-item mb-2 p-2 border rounded bg-light">
-        <div class="d-flex justify-content-between align-items-center">
-          <strong>${item.name}</strong><br>
-          <small>${formatPrice(parseFloat(item.price))} x ${item.quantity}</small>
-        </div>
-      </div>
-    `).join('');
-  }
-  
-  if (customer?.shipping) {
-    const addressBlock = document.createElement('div');
-    addressBlock.className = 'mt-2 p-2 bg-light rounded';
-    addressBlock.innerHTML = `
-      <strong>Endereço de Entrega:</strong><br>
-      <small>Rua: ${customer.shipping.street}</small><br>
-      <small>Nº: ${customer.shipping.number || ''}</small><br>
-      <small>Bairro: ${customer.shipping.neighborhood || ''}</small><br>
-      <small>Cidade/UF: ${customer.shipping.city}, ${customer.shipping.state}</small><br>
-      <small>CEP: ${formatZip(customer.shipping.zip)}</small>
-    `;
-    list.after(addressBlock);
-  }
-  
-  const checkoutBtn = modalElement.querySelector('#checkoutButton');
-  if (checkoutBtn) {
-    checkoutBtn.disabled = cart.length === 0 || !customer?.shipping;
-  }
-  
-  return true;
-}
 renderCart();
 updateCustomerHeader();
 loadProducts().then(() => loadCustomerCart());
@@ -1248,79 +1206,3 @@ async function prepareVariantImages(variants, messageId) {
   }
   return true;
 }
-
-async function performCheckout() {
-  try {
-    const orderItems = cart.map(item => ({
-      product_id: item.product_id,
-      quantity: item.quantity,
-      price: item.price
-    }));
-    
-    if (!customer?.id || !orderItems.length) {
-      resetCheckoutMessage(this);
-      return showMessage('checkoutMessage', 'Por favor, faça o login ou cadastre-se primeiro.');
-    }
-    
-    const address = buildAddressFromForm();
-    
-    const customerZipEl = document.getElementById('customerZip') || 
-                           document.querySelector('[id$="-zip"]');
-    const shippingZip = customerZipEl?.value || address.city;
-    
-    const orderData = {
-      customer_id: customer.id,
-      items: orderItems,
-      total: cart.reduce((sum, item) => sum + parseFloat(item.price) * item.quantity, 0),
-      status: 'pending',
-      shipping: {
-        street: address.street || '',
-        number: address.number || '',
-        neighborhood: address.neighborhood || '',
-        city: address.city,
-        state: address.state,
-        zip: customerZipEl?.value || null
-      }
-    };
-    
-    const orderResponse = await supabaseClient.rpc('create_order', { order_data: orderData });
-    
-    if (!orderResponse.data) {
-      resetCheckoutMessage(this);
-      return showMessage('checkoutMessage', 'Não foi possível processar seu pedido. Tente novamente.');
-    }
-    
-    const order = orderResponse.data;
-    
-    cart = [];
-    
-    if (customer.id) {
-      const existingOrders = customer.orders || [];
-      customer.orders = [...existingOrders, order];
-      localStorage.setItem('serena-customer', JSON.stringify(customer));
-    }
-    
-    resetCheckoutMessage(this);
-    showMessage('checkoutMessage', `Pedido realizado com sucesso! Números do pedido: ${order.id} e total: R$ ${(order.total / 100).toFixed(2)}.\nAguardando confirmação.`);
-    
-    return true;
-  } catch (error) {
-    console.error('Erro no checkout:', error);
-    resetCheckoutMessage(this);
-    showMessage('checkoutMessage', 'Ocorreu um erro ao processar seu pedido. Por favor, tente novamente mais tarde.');
-    return false;
-  }
-}
-
-// Configurar botões de checkout nos modais de produto e carrinho
-document.addEventListener('DOMContentLoaded', () => {
-  const productCheckoutBtns = document.querySelectorAll('[id$="-checkoutButton"]');
-  
-  // Adicionar evento ao modal do carrinho
-  const cartCheckoutBtn = document.querySelector('#cartDrawer .btn-success');
-  if (cartCheckoutBtn) {
-    cartCheckoutBtn.addEventListener('click', performCheckout);
-  }
-  
-  console.log('✅ Serena Shop - Checkout configurado!');
-});

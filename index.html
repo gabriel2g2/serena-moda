@@ -149,99 +149,37 @@
         </div>
       </aside>
 
-<!-- Modal de Checkout -->
-<div class="checkout-modal" id="checkoutModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
-  <div class="modal-backdrop checkout-backdrop" data-close-checkout></div>
-  
-  <div class="modal-container checkout-container">
-    <!-- Cabeçalho -->
-    <div class="checkout-header">
-      <h2 id="checkoutTitle"><i class="bi bi-shop me-2"></i>Finalizar Compra</h2>
-      <button class="modal-close" type="button" aria-label="Fechar checkout" data-close-checkout><i class="bi bi-x-lg"></i></button>
-    </div>
-
-    <!-- Formulário de Dados do Cliente -->
-    <section class="checkout-section customer-form">
-      <h3>Dados de Entrega</h3>
-      
-      <div class="form-group">
-        <label for="customerName">Nome Completo *</label>
-        <input type="text" id="customerName" name="name" required placeholder="Ex.: Ana Silva">
-      </div>
-      
-      <div class="form-group">
-        <label for="customerEmail">E-mail *</label>
-        <input type="email" id="customerEmail" name="email" required placeholder="ana@exemplo.com">
-      </div>
-      
-      <div class="form-group">
-        <label for="customerPhone">Telefone/WhatsApp *</label>
-        <input type="tel" id="customerPhone" name="phone" required placeholder="(11) 99999-9999">
-        <small class="form-help">Usaremos apenas para confirmar seu pedido.</small>
-      </div>
-
-      <!-- Busca de Endereço -->
-      <div class="address-search">
-        <h4>Endereço de Entrega</h4>
-        <div class="form-group">
-          <label for="customerCep">CEP *</label>
-          <input type="text" id="customerCep" name="cep" required placeholder="00000-000" maxlength="9"
-                 onblur="this.value = this.value.replace(/[\\D]/g,'').replace(/(.{5})/, '$1') + '-' + (this.value.slice(-2) || '')">
-        </div>
-      </div>
-    </section>
-
-    <!-- Resumo do Pedido -->
-    <section class="checkout-section checkout-summary" aria-labelledby="orderSummaryTitle">
-      <h3 id="orderSummaryTitle">Resumo do Pedido</h3>
-      
-      <div class="summary-header"><span>Produtos:</span><span id="summaryCount">0 itens</span></div>
-      <div class="summary-items" id="summaryItems">
-        <!-- Itens injetados via JS -->
-      </div>
-      
-      <div class="summary-totals">
-        <div class="total-row"><label>Subtotal:</label><span id="subtotal">R$ 0,00</span></div>
-        <div class="total-row highlight"><label>Frete Estimado:</label><span id="shippingEstimate">R$ 29,90</span></div>
-        <div class="total-row final"><label>TOTAL:</label><span id="grandTotal">R$ 0,00</span></div>
-      </div>
-    </section>
-
-    <!-- Pagamento Simulado -->
-    <section class="checkout-section checkout-payment">
-      <h3>Forma de Pagamento</h3>
-      
-      <div class="payment-options">
-        <div class="payment-option" data-method="pix">
-          <i class="bi bi-wallet2"></i>
-          <span>Pix (Recomendado)</span>
-          <small>✅ Pagamento imediato</small>
-        </div>
-        <div class="payment-option" data-method="card">
-          <i class="bi bi-credit-card"></i>
-          <span>Cartão de Crédito</span>
-          <small>Até 3x sem juros</small>
-        </div>
-      </div>
-
-      <!-- QR Code do Pix (aparece quando selecionado) -->
-      <div id="pixContainer" class="pix-payment hidden">
-        <p>Gere um PIX e pague até 15min:</p>
-        <img id="pixQRCode" src="" alt="QR Code Pix">
-        <small>Aguardando pagamento...</small>
-      </div>
-    </section>
-
-    <!-- Botão Finalizar -->
-    <div class="checkout-actions">
-      <button type="button" class="btn btn-secondary" data-close-checkout id="closeCheckout">Cancelar</button>
-      <button type="button" class="btn btn-serena btn-lg" id="finishCheckout">
-        <i class="bi bi-basket me-2"></i>Finalizar Compra
-      </button>
-    </div>
-
-  </div>
-</div>
+      <section class="checkout-modal" id="checkoutModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
+        <div class="checkout-backdrop" data-close-checkout></div>
+        <form class="checkout-container checkout-form" id="checkoutForm">
+          <header class="checkout-header">
+            <div><p class="eyebrow">Última etapa</p><h2 id="checkoutTitle">Finalizar pedido</h2></div>
+            <button class="modal-close" type="button" aria-label="Fechar checkout" data-close-checkout><i class="bi bi-x-lg"></i></button>
+          </header>
+          <section class="checkout-section">
+            <h3>Entrega</h3>
+            <p class="checkout-address" id="checkoutAddress"></p>
+          </section>
+          <section class="checkout-section">
+            <h3>Resumo do pedido</h3>
+            <ul class="checkout-items" id="checkoutItems"></ul>
+            <div class="checkout-total"><span>Subtotal</span><strong id="checkoutSubtotal"></strong></div>
+            <div class="checkout-total"><span>Frete</span><strong id="checkoutShipping"></strong></div>
+            <div class="checkout-total checkout-grand-total"><span>Total</span><strong id="checkoutTotal"></strong></div>
+          </section>
+          <fieldset class="checkout-section checkout-payment">
+            <legend>Forma de pagamento</legend>
+            <label class="checkout-payment-option"><input type="radio" name="checkoutPayment" value="pix" required><span><strong>Pix</strong><small>Pagamento será combinado após o registro do pedido.</small></span></label>
+            <label class="checkout-payment-option"><input type="radio" name="checkoutPayment" value="credit"><span><strong>Cartão de crédito</strong><small>Não informe dados do cartão nesta página; a loja combinará o pagamento.</small></span></label>
+            <label class="checkout-payment-option"><input type="radio" name="checkoutPayment" value="debit"><span><strong>Cartão de débito</strong><small>Não informe dados do cartão nesta página; a loja combinará o pagamento.</small></span></label>
+          </fieldset>
+          <p class="checkout-message" id="checkoutMessage" role="status"></p>
+          <footer class="checkout-actions">
+            <button class="customer-history-button" type="button" data-close-checkout>Voltar</button>
+            <button class="btn btn-serena" type="submit" id="confirmOrderButton">Registrar pedido</button>
+          </footer>
+        </form>
+      </section>
 
       <section id="categorias" class="categories-section">
         <div class="container section-space">
@@ -376,108 +314,5 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="script.js"></script>
-    <!-- =============================================
-        MODAL DE CHECKOUT - VISUALIZADO NA TELA
-        ============================================= -->
-    <div class="checkout-modal" id="checkoutModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="checkoutTitle">
-      <div class="checkout-backdrop" data-close-checkout></div>
-      
-      <div class="modal-container checkout-container">
-        <!-- Seção de Informações do Pedido -->
-        <div class="checkout-section summary-header">
-          <span>Resumo do seu pedido</span>
-          <span id="summaryCount"></span>
-        </div>
-
-        <!-- Resumo dos Itens -->
-        <div class="checkout-section summary-items" id="checkoutItemsSection"></div>
-
-        <!-- Totais -->
-        <div class="checkout-section summary-totals">
-          <h3>TOTAL DO PEDIDO</h3>
-          <div class="total-row final"><span>TOTAL FINAL:</span><span id="checkoutTotalFinal"></span></div>
-        </div>
-
-        <!-- Dados do Cliente -->
-        <div class="checkout-section customer-form">
-          <h3>DADOS DE ENTREGA</h3>
-          
-          <div class="form-group">
-            <label for="customerName">Nome Completo:</label>
-            <input type="text" id="customerName" name="name" required placeholder="Digite seu nome completo">
-          </div>
-
-          <div class="form-group">
-            <label for="customerCPF">CPF:</label>
-            <input type="text" id="customerCPF" name="cpf" maxlength="14" autocomplete="cpf" placeholder="000.000.000-00">
-            <small class="form-help">Somente números - com ou sem pontos e traço</small>
-          </div>
-
-          <div class="form-group">
-            <label for="customerCEP">CEP:</label>
-            <input type="text" id="customerCEP" name="cep" maxlength="9" autocomplete="cep" placeholder="00000-000">
-            <small class="form-help">O endereço será consultado automaticamente pelo CEP</small>
-          </div>
-
-          <!-- Busca de Endereço -->
-          <div class="address-search">
-            <h4>Clique em pesquisar para buscar o endereço</h4>
-            <button type="button" class="btn btn-secondary" id="searchAddressBtn">🔍 Pesquisar Endereço</button>
-            
-            <!-- Resultado da pesquisa -->
-            <div id="addressResult" class="shipping-result"></div>
-          </div>
-
-          <div hidden>
-            <input type="text" id="addressStreet" name="street">
-            <input type="text" id="addressNumber" name="number">
-            <input type="text" id="addressComplement" name="complement">
-            <input type="text" id="addressNeighborhood" name="neighborhood">
-          </div>
-        </div>
-
-        <!-- Opções de Pagamento -->
-        <div class="checkout-section payment-options">
-          <h3>MÉTODO DE PAGAMENTO</h3>
-          
-          <label class="payment-option" id="pixOption" for="pixOptionCheckbox">
-            <input type="radio" name="paymentMethod" value="pix" id="pixOptionCheckbox" required aria-labelledby="pixOptionLabel">
-            <i class="bi bi-barcode-scan"></i>
-            <span>Pix (Aprovação instantânea)</span>
-            <small>Gere um QR Code ao confirmar o pagamento</small>
-          </label>
-
-          <label class="payment-option" id="creditOption" for="creditOptionCheckbox">
-            <input type="radio" name="paymentMethod" value="credit" id="creditOptionCheckbox">
-            <i class="bi bi-credit-card"></i>
-            <span>Cartão de Crédito</span>
-            <small>Aprovação em tempo real • Parcelamento sem juros</small>
-          </label>
-
-          <label class="payment-option" id="debitOption" for="debitOptionCheckbox">
-            <input type="radio" name="paymentMethod" value="debit" id="debitOptionCheckbox">
-            <i class="bi bi-credit-card-front"></i>
-            <span>Cartão de Débito</span>
-            <small>Válido em todo o Brasil • Sem tarifas extras</small>
-          </label>
-
-          <!-- Container do QR Code -->
-          <div id="pixPayment" class="pix-payment" hidden>
-            <i class="bi bi-qrcode" style="font-size:2rem;color:#8a7c70"></i>
-            <img id="pixQRCode" src="" alt="QR Code do Pix">
-            <small>O PIX será debitado em sua conta cadastrada</small>
-          </div>
-        </div>
-
-        <!-- Ações -->
-        <div class="checkout-actions">
-          <button type="button" class="btn btn-secondary" id="cancelOrderBtn">Cancelar</button>
-          <button type="submit" class="btn" id="confirmOrderBtn">Confirmar Pedido</button>
-        </div>
-      </div>
-    </div>
-    <!-- ============================================= -->
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="script.js"></script>
+  </body>
 </html>
